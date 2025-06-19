@@ -1,0 +1,10 @@
+# Citation file for Z-Rad
+cff-version: 1.2.0
+message: "If you use Z-Rad in your research, please cite this software."
+title: "Z-Rad"
+authors:
+  - family-names: "USZ Medical Physics"
+    name: "Radiomics Team"
+version: "25.4.1-dev"
+license: "MIT"
+repository-code: "https://github.com/medical-physics-usz/z-rad"

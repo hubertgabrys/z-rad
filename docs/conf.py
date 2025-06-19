@@ -3,6 +3,29 @@
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+import os
+import sys
+
+# Ensure local package is importable so autodoc can find modules
+sys.path.insert(0, os.path.abspath('..'))
+
+# Mock heavy optional dependencies so autodoc does not import them
+autodoc_mock_imports = [
+    "numpy",
+    "pydicom",
+    "SimpleITK",
+    "PyQt5",
+    "cv2",
+    "pandas",
+    "scipy",
+    "skimage",
+    "sklearn",
+    "pywt",
+    "openpyxl",
+    "joblib",
+    "tqdm",
+]
+
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
@@ -16,10 +39,13 @@ release = '24.4'
 
 extensions = [
     "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
     "sphinx.ext.githubpages",
 ]
+
+autosummary_generate = True
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
