@@ -1,14 +1,14 @@
 API Reference
 =============
 
-.. automodule:: zrad.filtering
+.. automodule:: zrad.filtering.filtering
    :members:
 
-.. automodule:: zrad.preprocessing
+.. automodule:: zrad.preprocessing.preprocessing
    :members:
 
-.. automodule:: zrad.radiomics
+.. automodule:: zrad.radiomics.radiomics
    :members:
 
-.. automodule:: zrad.gui
+.. automodule:: zrad.gui.toolbox_gui
    :members:

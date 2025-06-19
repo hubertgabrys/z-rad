@@ -1,5 +1,5 @@
 About Z-Rad
-==========
+===========
 
 Z-Rad is a toolkit for medical image filtering, preprocessing and radiomics analysis. It provides a graphical user interface for clinical users as well as a Python API for researchers who need to automate workflows.
 
