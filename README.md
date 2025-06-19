@@ -83,25 +83,33 @@ Executables can be also generated for Windows, MacOS, and Linux by running
 ```sh
 python generate_executable.py
 ```
-Creating an executable requires [PyInstaller](https://pyinstaller.readthedocs.io).
-The executable is going to be saved in *dist/* directory.
+Building an executable requires [PyInstaller](https://pyinstaller.readthedocs.io).
+Install it with ``pip install pyinstaller`` if it is not already available.
+The generated files are saved in the ``dist/`` directory. If the build fails,
+check the PyInstaller output for missing system packages.
 
 ### Windows, Linux, and macOS
 For users familiar with Python programming langauage, we recommend: 
 
 1. Download the Z-Rad repository
 2. Open the terminal and navigate to the project directory
-3. Install requirements by typing in the terminal:
+3. Create and activate a virtual environment (requires Python >=3.10):
 
-```sh
-pip install -r requirements.txt
-```
+   ```sh
+   python3 -m venv .venv
+   source .venv/bin/activate
+   ```
+4. Install requirements and the package:
 
-4. Run the `main.py` file:
+   ```sh
+   pip install -r requirements.txt
+   pip install -e .
+   ```
+5. Run the `main.py` file:
 
-```sh
-python main.py
-```
+   ```sh
+   python main.py
+   ```
 
 ### API
 ```sh
