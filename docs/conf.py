@@ -20,7 +20,7 @@ autodoc_mock_imports = [
     "scipy",
     "skimage",
     "sklearn",
-    "PyWavelets",
+    "pywt",
     "openpyxl",
     "joblib",
     "tqdm",
@@ -39,10 +39,13 @@ release = '24.4'
 
 extensions = [
     "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
     "sphinx.ext.githubpages",
 ]
+
+autosummary_generate = True
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']

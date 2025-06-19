@@ -12,7 +12,7 @@ Z-Rad is a toolkit for medical image filtering, preprocessing, and radiomics ana
    about
    installation
    tutorials/index
-   api/modules
+   api/index
    development
    license
 
