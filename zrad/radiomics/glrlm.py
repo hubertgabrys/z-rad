@@ -1,6 +1,6 @@
 import numpy as np
 
-from .base import TextureMatrixBase
+from ._texture_matrix_base import TextureMatrixBase
 
 
 class GLRLM(TextureMatrixBase):

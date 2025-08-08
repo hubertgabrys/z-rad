@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.ndimage import convolve
 
-from .base import TextureMatrixBase
+from ._texture_matrix_base import TextureMatrixBase
 
 
 class NGLDM(TextureMatrixBase):
