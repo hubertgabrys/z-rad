@@ -1,13 +1,4 @@
 import numpy as np
-from scipy.ndimage import convolve
-from scipy.ndimage import distance_transform_cdt, label, generate_binary_structure, minimum
-from scipy.ndimage.morphology import generate_binary_structure
-from scipy.spatial.distance import pdist, squareform
-from scipy.spatial import ConvexHull
-from scipy.special import legendre
-from scipy.stats import iqr, skew, kurtosis
-from skimage import measure
-from sklearn.decomposition import PCA
 
 
 class GLCM:
@@ -23,57 +14,130 @@ class GLCM:
         self.glcm_2d_matrices = []
         self.slice_no_of_roi_voxels = []
 
-        self.joint_max = 0  # 3.6.1
-        self.joint_average = 0  # 3.6.2
-        self.joint_var = 0  # 3.6.3
-        self.joint_entropy = 0  # 3.6.4
-        self.dif_average = 0  # 3.6.5
-        self.dif_var = 0  # 3.6.6
-        self.dif_entropy = 0  # 3.6.7
-        self.sum_average = 0  # 3.6.8
-        self.sum_var = 0  # 3.6.9
-        self.sum_entropy = 0  # 3.6.10
-        self.ang_second_moment = 0  # 3.6.11
-        self.contrast = 0  # 3.6.12
-        self.dissimilarity = 0  # 3.6.13
-        self.inv_diff = 0  # 3.6.14
-        self.norm_inv_diff = 0  # 3.6.15
-        self.inv_diff_moment = 0  # 3.6.16
-        self.norm_inv_diff_moment = 0  # 3.6.17
-        self.inv_variance = 0  # 3.6.18
-        self.cor = 0  # 3.6.19
-        self.autocor = 0  # 3.6.20
-        self.cluster_tendency = 0  # 3.6.21
-        self.cluster_shade = 0  # 3.6.22
-        self.cluster_prominence = 0  # 3.6.23
-        self.inf_cor_1 = 0  # 3.6.24
-        self.inf_cor_2 = 0  # 3.6.25
+        # Feature names used across the class. The first 25 match the benchmark
+        # feature numbers used in the original implementation.
+        self.feature_names = [
+            "joint_max",
+            "joint_average",
+            "joint_var",
+            "joint_entropy",
+            "dif_average",
+            "dif_var",
+            "dif_entropy",
+            "sum_average",
+            "sum_var",
+            "sum_entropy",
+            "ang_second_moment",
+            "contrast",
+            "dissimilarity",
+            "inv_diff",
+            "norm_inv_diff",
+            "inv_diff_moment",
+            "norm_inv_diff_moment",
+            "inv_variance",
+            "cor",
+            "autocor",
+            "cluster_tendency",
+            "cluster_shade",
+            "cluster_prominence",
+            "inf_cor_1",
+            "inf_cor_2",
+        ]
 
-        self.joint_max_list = []  # 3.6.1
-        self.joint_average_list = []  # 3.6.2
-        self.joint_var_list = []  # 3.6.3
-        self.joint_entropy_list = []  # 3.6.4
-        self.dif_average_list = []  # 3.6.5
-        self.dif_var_list = []  # 3.6.6
-        self.dif_entropy_list = []  # 3.6.7
-        self.sum_average_list = []  # 3.6.8
-        self.sum_var_list = []  # 3.6.9
-        self.sum_entropy_list = []  # 3.6.10
-        self.ang_second_moment_list = []  # 3.6.11
-        self.contrast_list = []  # 3.6.12
-        self.dissimilarity_list = []  # 3.6.13
-        self.inv_diff_list = []  # 3.6.14
-        self.norm_inv_diff_list = []  # 3.6.15
-        self.inv_diff_moment_list = []  # 3.6.16
-        self.norm_inv_diff_moment_list = []  # 3.6.17
-        self.inv_variance_list = []  # 3.6.18
-        self.cor_list = []  # 3.6.19
-        self.autocor_list = []  # 3.6.20
-        self.cluster_tendency_list = []  # 3.6.21
-        self.cluster_shade_list = []  # 3.6.22
-        self.cluster_prominence_list = []  # 3.6.23
-        self.inf_cor_1_list = []  # 3.6.24
-        self.inf_cor_2_list = []  # 3.6.25
+        # Dynamically create attributes for feature values and per-slice lists
+        # to avoid repetitive code.
+        for name in self.feature_names:
+            setattr(self, name, 0)
+            setattr(self, f"{name}_list", [])
+
+    # ------------------------------------------------------------------
+    # Helper utilities
+    # ------------------------------------------------------------------
+
+    def _reset_feature_lists(self):
+        """Clear all feature lists used for intermediate calculations."""
+        for name in self.feature_names:
+            getattr(self, f"{name}_list").clear()
+
+    def _calc_features_from_glcm(self, glcm):
+        """Calculate all features for a single GLCM matrix.
+
+        The input matrix is normalised internally. A dictionary mapping the
+        feature name to its value is returned. This method centralises the
+        feature calculations and is reused across the different aggregation
+        strategies to avoid code duplication.
+        """
+
+        glcm = glcm / np.sum(glcm)
+
+        features = {}
+        features["joint_max"] = np.max(glcm)
+        joint_average = self.calc_joint_average(glcm)
+        features["joint_average"] = joint_average
+        features["joint_var"] = self.calc_joint_var(glcm, joint_average)
+        features["joint_entropy"] = self.calc_joint_entropy(glcm)
+
+        p_minus = self.calc_p_minus(glcm)
+        dif_average = self.calc_diff_average(p_minus)
+        features["dif_average"] = dif_average
+        features["dif_var"] = self.calc_dif_var(p_minus, dif_average)
+        features["dif_entropy"] = self.calc_diff_entropy(p_minus)
+
+        p_plus = self.calc_p_plus(glcm)
+        sum_average = self.calc_sum_average(p_plus)
+        features["sum_average"] = sum_average
+        features["sum_var"] = self.calc_sum_var(p_plus, sum_average)
+        features["sum_entropy"] = self.calc_sum_entropy(p_plus)
+
+        features["ang_second_moment"] = self.calc_second_moment(glcm)
+        features["contrast"] = self.calc_contrast(glcm)
+        features["dissimilarity"] = self.calc_dissimilarity(glcm)
+        features["inv_diff"] = self.calc_inverse_diff(glcm)
+        features["norm_inv_diff"] = self.calc_norm_inv_diff(glcm)
+        features["inv_diff_moment"] = self.calc_inv_diff_moment(p_minus)
+        features["norm_inv_diff_moment"] = self.calc_norm_inv_diff_moment(p_minus)
+        features["inv_variance"] = self.calc_inv_variance(p_minus)
+
+        features["cor"] = self.calc_correlation(glcm)
+        features["autocor"] = self.calc_autocor(glcm)
+        features["cluster_tendency"] = self.calc_cluster_tendency_shade_prominence(glcm, 2)
+        features["cluster_shade"] = self.calc_cluster_tendency_shade_prominence(glcm, 3)
+        features["cluster_prominence"] = self.calc_cluster_tendency_shade_prominence(glcm, 4)
+
+        features["inf_cor_1"] = self.calc_information_correlation_1(glcm)
+        features["inf_cor_2"] = self.calc_information_correlation_2(glcm)
+
+        return features
+
+    def _append_features(self, glcm):
+        """Compute features for ``glcm`` and append them to the lists."""
+        features = self._calc_features_from_glcm(glcm)
+        for name, value in features.items():
+            getattr(self, f"{name}_list").append(value)
+
+    def _finalize_features(self, weights):
+        """Finalize feature values from stored lists using ``weights``.
+
+        Depending on ``slice_median`` and ``slice_weight`` the features are
+        aggregated using a median or a weighted average.
+        """
+
+        if self.slice_median and not self.slice_weight:
+            for name in self.feature_names:
+                setattr(self, name, np.median(getattr(self, f"{name}_list")))
+        elif not self.slice_median:
+            for name in self.feature_names:
+                setattr(
+                    self,
+                    name,
+                    np.average(getattr(self, f"{name}_list"), weights=weights),
+                )
+        else:
+            print("Weighted median not supported. Aborted!")
+
+    # ------------------------------------------------------------------
+    # Original public API
+    # ------------------------------------------------------------------
 
     def calc_glc_2d_matrices(self):
 
@@ -348,442 +412,76 @@ class GLCM:
         return np.sum(matrix * i * j)
 
     def calc_2d_averaged_glcm_features(self):
+        self._reset_feature_lists()
 
         number_of_slices = self.glcm_2d_matrices.shape[0]
         number_of_directions = self.glcm_2d_matrices.shape[1]
         weights = []
         for i in range(number_of_slices):
+            weight = (
+                self.slice_no_of_roi_voxels[i] / self.tot_no_of_roi_voxels
+                if self.slice_weight
+                else 1
+            )
             for j in range(number_of_directions):
-                glcm_slice = self.glcm_2d_matrices[i][j] / np.sum(self.glcm_2d_matrices[i][j])
-                weight = 1
-                if self.slice_weight:
-                    weight = self.slice_no_of_roi_voxels[i] / self.tot_no_of_roi_voxels
+                self._append_features(self.glcm_2d_matrices[i][j])
                 weights.append(weight)
 
-                self.joint_max_list.append(np.max(glcm_slice))
-                glcm_ij_joint_average = self.calc_joint_average(glcm_slice)
-                self.joint_average_list.append(glcm_ij_joint_average)
-                self.joint_var_list.append(self.calc_joint_var(glcm_slice, glcm_ij_joint_average))
-                self.joint_entropy_list.append(self.calc_joint_entropy(glcm_slice))
-
-                p_minus = self.calc_p_minus(glcm_slice)
-                glcm_ij_dif_average = self.calc_diff_average(p_minus)
-                self.dif_average_list.append(glcm_ij_dif_average)
-                self.dif_var_list.append(self.calc_dif_var(p_minus, glcm_ij_dif_average))
-                self.dif_entropy_list.append(self.calc_diff_entropy(p_minus))
-
-                p_plus = self.calc_p_plus(glcm_slice)
-                glcm_ij_sum_average = self.calc_sum_average(p_plus)
-                self.sum_average_list.append(glcm_ij_sum_average)
-                self.sum_var_list.append(self.calc_sum_var(p_plus, glcm_ij_sum_average))
-                self.sum_entropy_list.append(self.calc_sum_entropy(p_plus))
-
-                self.ang_second_moment_list.append(self.calc_second_moment(glcm_slice))
-                self.contrast_list.append(self.calc_contrast(glcm_slice))
-                self.dissimilarity_list.append(self.calc_dissimilarity(glcm_slice))
-                self.inv_diff_list.append(self.calc_inverse_diff(glcm_slice))
-                self.norm_inv_diff_list.append(self.calc_norm_inv_diff(glcm_slice))
-                self.inv_diff_moment_list.append(self.calc_inv_diff_moment(p_minus))
-                self.norm_inv_diff_moment_list.append(self.calc_norm_inv_diff_moment(p_minus))
-                self.inv_variance_list.append(self.calc_inv_variance(p_minus))
-
-                self.cor_list.append(self.calc_correlation(glcm_slice))
-                self.autocor_list.append(self.calc_autocor(glcm_slice))
-                self.cluster_tendency_list.append(self.calc_cluster_tendency_shade_prominence(glcm_slice, 2))
-                self.cluster_shade_list.append(self.calc_cluster_tendency_shade_prominence(glcm_slice, 3))
-                self.cluster_prominence_list.append(self.calc_cluster_tendency_shade_prominence(glcm_slice, 4))
-
-                self.inf_cor_1_list.append(self.calc_information_correlation_1(glcm_slice))
-                self.inf_cor_2_list.append(self.calc_information_correlation_2(glcm_slice))
-
-        if self.slice_median and not self.slice_weight:
-            self.joint_max = np.median(self.joint_max_list)
-            self.joint_average = np.median(self.joint_average_list)
-            self.joint_var = np.median(self.joint_var_list)
-            self.joint_entropy = np.median(self.joint_entropy_list)
-            self.dif_average = np.median(self.dif_average_list)
-            self.dif_var = np.median(self.dif_var_list)
-            self.dif_entropy = np.median(self.dif_entropy_list)
-            self.sum_average = np.median(self.sum_average_list)
-            self.sum_var = np.median(self.sum_var_list)
-            self.sum_entropy = np.median(self.sum_entropy_list)
-            self.ang_second_moment = np.median(self.ang_second_moment_list)
-            self.contrast = np.median(self.contrast_list)
-            self.dissimilarity = np.median(self.dissimilarity_list)
-            self.inv_diff = np.median(self.inv_diff_list)
-            self.norm_inv_diff = np.median(self.norm_inv_diff_list)
-            self.inv_diff_moment = np.median(self.inv_diff_moment_list)
-            self.norm_inv_diff_moment = np.median(self.norm_inv_diff_moment_list)
-            self.inv_variance = np.median(self.inv_variance_list)
-            self.cor = np.median(self.cor_list)
-            self.autocor = np.median(self.autocor_list)
-            self.cluster_tendency = np.median(self.cluster_tendency_list)
-            self.cluster_shade = np.median(self.cluster_shade_list)
-            self.cluster_prominence = np.median(self.cluster_prominence_list)
-            self.inf_cor_1 = np.median(self.inf_cor_1_list)
-            self.inf_cor_2 = np.median(self.inf_cor_2_list)
-
-        elif not self.slice_median:
-            self.joint_max = np.average(self.joint_max_list, weights=weights)
-            self.joint_average = np.average(self.joint_average_list, weights=weights)
-            self.joint_var = np.average(self.joint_var_list, weights=weights)
-            self.joint_entropy = np.average(self.joint_entropy_list, weights=weights)
-            self.dif_average = np.average(self.dif_average_list, weights=weights)
-            self.dif_var = np.average(self.dif_var_list, weights=weights)
-            self.dif_entropy = np.average(self.dif_entropy_list, weights=weights)
-            self.sum_average = np.average(self.sum_average_list, weights=weights)
-            self.sum_var = np.average(self.sum_var_list, weights=weights)
-            self.sum_entropy = np.average(self.sum_entropy_list, weights=weights)
-            self.ang_second_moment = np.average(self.ang_second_moment_list, weights=weights)
-            self.contrast = np.average(self.contrast_list, weights=weights)
-            self.dissimilarity = np.average(self.dissimilarity_list, weights=weights)
-            self.inv_diff = np.average(self.inv_diff_list, weights=weights)
-            self.norm_inv_diff = np.average(self.norm_inv_diff_list, weights=weights)
-            self.inv_diff_moment = np.average(self.inv_diff_moment_list, weights=weights)
-            self.norm_inv_diff_moment = np.average(self.norm_inv_diff_moment_list, weights=weights)
-            self.inv_variance = np.average(self.inv_variance_list, weights=weights)
-            self.cor = np.average(self.cor_list, weights=weights)
-            self.autocor = np.average(self.autocor_list, weights=weights)
-            self.cluster_tendency = np.average(self.cluster_tendency_list, weights=weights)
-            self.cluster_shade = np.average(self.cluster_shade_list, weights=weights)
-            self.cluster_prominence = np.average(self.cluster_prominence_list, weights=weights)
-            self.inf_cor_1 = np.average(self.inf_cor_1_list, weights=weights)
-            self.inf_cor_2 = np.average(self.inf_cor_2_list, weights=weights)
-        else:
-            print('Weighted median not supported. Aborted!')
-            return
+        self._finalize_features(weights)
 
     def calc_2d_slice_merged_glcm_features(self):
+        self._reset_feature_lists()
 
         number_of_slices = self.glcm_2d_matrices.shape[0]
         weights = []
 
         averaged_glcm = np.sum(self.glcm_2d_matrices, axis=1)
         for slice_id in range(number_of_slices):
-            glcm_slice = averaged_glcm[slice_id] / np.sum(averaged_glcm[slice_id])
-            weight = 1
-            if self.slice_weight:
-                weight = self.slice_no_of_roi_voxels[slice_id] / self.tot_no_of_roi_voxels
+            self._append_features(averaged_glcm[slice_id])
+            weight = (
+                self.slice_no_of_roi_voxels[slice_id] / self.tot_no_of_roi_voxels
+                if self.slice_weight
+                else 1
+            )
             weights.append(weight)
 
-            self.joint_max_list.append(np.max(glcm_slice))
-            glcm_i_joint_average = self.calc_joint_average(glcm_slice)
-            self.joint_average_list.append(glcm_i_joint_average)
-            self.joint_var_list.append(self.calc_joint_var(glcm_slice, glcm_i_joint_average))
-            self.joint_entropy_list.append(self.calc_joint_entropy(glcm_slice))
-
-            p_minus = self.calc_p_minus(glcm_slice)
-            glcm_i_dif_average = self.calc_diff_average(p_minus)
-            self.dif_average_list.append(glcm_i_dif_average)
-            self.dif_var_list.append(self.calc_dif_var(p_minus, glcm_i_dif_average))
-            self.dif_entropy_list.append(self.calc_diff_entropy(p_minus))
-
-            p_plus = self.calc_p_plus(glcm_slice)
-            glcm_i_sum_average = self.calc_sum_average(p_plus)
-            self.sum_average_list.append(glcm_i_sum_average)
-            self.sum_var_list.append(self.calc_sum_var(p_plus, glcm_i_sum_average))
-            self.sum_entropy_list.append(self.calc_sum_entropy(p_plus))
-
-            self.ang_second_moment_list.append(self.calc_second_moment(glcm_slice))
-            self.contrast_list.append(self.calc_contrast(glcm_slice))
-            self.dissimilarity_list.append(self.calc_dissimilarity(glcm_slice))
-            self.inv_diff_list.append(self.calc_inverse_diff(glcm_slice))
-            self.norm_inv_diff_list.append(self.calc_norm_inv_diff(glcm_slice))
-            self.inv_diff_moment_list.append(self.calc_inv_diff_moment(p_minus))
-            self.norm_inv_diff_moment_list.append(self.calc_norm_inv_diff_moment(p_minus))
-            self.inv_variance_list.append(self.calc_inv_variance(p_minus))
-
-            self.cor_list.append(self.calc_correlation(glcm_slice))
-            self.autocor_list.append(self.calc_autocor(glcm_slice))
-            self.cluster_tendency_list.append(self.calc_cluster_tendency_shade_prominence(glcm_slice, 2))
-            self.cluster_shade_list.append(self.calc_cluster_tendency_shade_prominence(glcm_slice, 3))
-            self.cluster_prominence_list.append(self.calc_cluster_tendency_shade_prominence(glcm_slice, 4))
-
-            self.inf_cor_1_list.append(self.calc_information_correlation_1(glcm_slice))
-            self.inf_cor_2_list.append(self.calc_information_correlation_2(glcm_slice))
-
-        if self.slice_median and not self.slice_weight:
-            self.joint_max = np.median(self.joint_max_list)
-            self.joint_average = np.median(self.joint_average_list)
-            self.joint_var = np.median(self.joint_var_list)
-            self.joint_entropy = np.median(self.joint_entropy_list)
-            self.dif_average = np.median(self.dif_average_list)
-            self.dif_var = np.median(self.dif_var_list)
-            self.dif_entropy = np.median(self.dif_entropy_list)
-            self.sum_average = np.median(self.sum_average_list)
-            self.sum_var = np.median(self.sum_var_list)
-            self.sum_entropy = np.median(self.sum_entropy_list)
-            self.ang_second_moment = np.median(self.ang_second_moment_list)
-            self.contrast = np.median(self.contrast_list)
-            self.dissimilarity = np.median(self.dissimilarity_list)
-            self.inv_diff = np.median(self.inv_diff_list)
-            self.norm_inv_diff = np.median(self.norm_inv_diff_list)
-            self.inv_diff_moment = np.median(self.inv_diff_moment_list)
-            self.norm_inv_diff_moment = np.median(self.norm_inv_diff_moment_list)
-            self.inv_variance = np.median(self.inv_variance_list)
-            self.cor = np.median(self.cor_list)
-            self.autocor = np.median(self.autocor_list)
-            self.cluster_tendency = np.median(self.cluster_tendency_list)
-            self.cluster_shade = np.median(self.cluster_shade_list)
-            self.cluster_prominence = np.median(self.cluster_prominence_list)
-            self.inf_cor_1 = np.median(self.inf_cor_1_list)
-            self.inf_cor_2 = np.median(self.inf_cor_2_list)
-
-        elif not self.slice_median:
-            self.joint_max = np.average(self.joint_max_list, weights=weights)
-            self.joint_average = np.average(self.joint_average_list, weights=weights)
-            self.joint_var = np.average(self.joint_var_list, weights=weights)
-            self.joint_entropy = np.average(self.joint_entropy_list, weights=weights)
-            self.dif_average = np.average(self.dif_average_list, weights=weights)
-            self.dif_var = np.average(self.dif_var_list, weights=weights)
-            self.dif_entropy = np.average(self.dif_entropy_list, weights=weights)
-            self.sum_average = np.average(self.sum_average_list, weights=weights)
-            self.sum_var = np.average(self.sum_var_list, weights=weights)
-            self.sum_entropy = np.average(self.sum_entropy_list, weights=weights)
-            self.ang_second_moment = np.average(self.ang_second_moment_list, weights=weights)
-            self.contrast = np.average(self.contrast_list, weights=weights)
-            self.dissimilarity = np.average(self.dissimilarity_list, weights=weights)
-            self.inv_diff = np.average(self.inv_diff_list, weights=weights)
-            self.norm_inv_diff = np.average(self.norm_inv_diff_list, weights=weights)
-            self.inv_diff_moment = np.average(self.inv_diff_moment_list, weights=weights)
-            self.norm_inv_diff_moment = np.average(self.norm_inv_diff_moment_list, weights=weights)
-            self.inv_variance = np.average(self.inv_variance_list, weights=weights)
-            self.cor = np.average(self.cor_list, weights=weights)
-            self.autocor = np.average(self.autocor_list, weights=weights)
-            self.cluster_tendency = np.average(self.cluster_tendency_list, weights=weights)
-            self.cluster_shade = np.average(self.cluster_shade_list, weights=weights)
-            self.cluster_prominence = np.average(self.cluster_prominence_list, weights=weights)
-            self.inf_cor_1 = np.average(self.inf_cor_1_list, weights=weights)
-            self.inf_cor_2 = np.average(self.inf_cor_2_list, weights=weights)
-        else:
-            print('Weighted median not supported. Aborted!')
-            return
+        self._finalize_features(weights)
 
     def calc_2_5d_merged_glcm_features(self):
         glcm = np.sum(np.sum(self.glcm_2d_matrices, axis=1), axis=0)
-
-        glcm = glcm / np.sum(glcm)
-
-        self.joint_max = np.max(glcm)
-        glcm_joint_average = self.calc_joint_average(glcm)
-        self.joint_average = glcm_joint_average
-        self.joint_var = self.calc_joint_var(glcm, glcm_joint_average)
-        self.joint_entropy = self.calc_joint_entropy(glcm)
-
-        p_minus = self.calc_p_minus(glcm)
-        glcm_dif_average = self.calc_diff_average(p_minus)
-        self.dif_average = glcm_dif_average
-        self.dif_var = self.calc_dif_var(p_minus, glcm_dif_average)
-        self.dif_entropy = self.calc_diff_entropy(p_minus)
-
-        p_plus = self.calc_p_plus(glcm)
-        glcm_sum_average = self.calc_sum_average(p_plus)
-        self.sum_average = glcm_sum_average
-        self.sum_var = self.calc_sum_var(p_plus, glcm_sum_average)
-        self.sum_entropy = self.calc_sum_entropy(p_plus)
-
-        self.ang_second_moment = self.calc_second_moment(glcm)
-        self.contrast = self.calc_contrast(glcm)
-        self.dissimilarity = self.calc_dissimilarity(glcm)
-        self.inv_diff = self.calc_inverse_diff(glcm)
-        self.norm_inv_diff = self.calc_norm_inv_diff(glcm)
-        self.inv_diff_moment = self.calc_inv_diff_moment(p_minus)
-        self.norm_inv_diff_moment = self.calc_norm_inv_diff_moment(p_minus)
-        self.inv_variance = self.calc_inv_variance(p_minus)
-
-        self.cor = self.calc_correlation(glcm)
-        self.autocor = self.calc_autocor(glcm)
-        self.cluster_tendency = self.calc_cluster_tendency_shade_prominence(glcm, 2)
-        self.cluster_shade = self.calc_cluster_tendency_shade_prominence(glcm, 3)
-        self.cluster_prominence = self.calc_cluster_tendency_shade_prominence(glcm, 4)
-
-        self.inf_cor_1 = self.calc_information_correlation_1(glcm)
-        self.inf_cor_2 = self.calc_information_correlation_2(glcm)
+        features = self._calc_features_from_glcm(glcm)
+        for name, value in features.items():
+            setattr(self, name, value)
 
     def calc_2_5d_direction_merged_glcm_features(self):
-        number_of_directions = self.glcm_2d_matrices.shape[1]
+        averaged_glcm = np.sum(self.glcm_2d_matrices, axis=0)
+        number_of_directions = averaged_glcm.shape[0]
+        feature_sums = {name: 0 for name in self.feature_names}
 
-        averaged_glcm = np.sum(self.glcm_2d_matrices, axis=0)  # / number_of_slices
+        for glcm in averaged_glcm:
+            features = self._calc_features_from_glcm(glcm)
+            for name in self.feature_names:
+                feature_sums[name] += features[name]
 
-        for i in range(number_of_directions):
-            M_i = averaged_glcm[i] / np.sum(averaged_glcm[i])
-            self.joint_max += np.max(M_i)
-            glcm_i_joint_average = self.calc_joint_average(M_i)
-            self.joint_average += glcm_i_joint_average
-            self.joint_var += self.calc_joint_var(M_i, glcm_i_joint_average)
-            self.joint_entropy += self.calc_joint_entropy(M_i)
-
-            p_minus = self.calc_p_minus(M_i)
-            glcm_i_dif_average = self.calc_diff_average(p_minus)
-            self.dif_average += glcm_i_dif_average
-            self.dif_var += self.calc_dif_var(p_minus, glcm_i_dif_average)
-            self.dif_entropy += self.calc_diff_entropy(p_minus)
-
-            p_plus = self.calc_p_plus(M_i)
-            glcm_i_sum_average = self.calc_sum_average(p_plus)
-            self.sum_average += glcm_i_sum_average
-            self.sum_var += self.calc_sum_var(p_plus, glcm_i_sum_average)
-            self.sum_entropy += self.calc_sum_entropy(p_plus)
-
-            self.ang_second_moment += self.calc_second_moment(M_i)
-            self.contrast += self.calc_contrast(M_i)
-            self.dissimilarity += self.calc_dissimilarity(M_i)
-            self.inv_diff += self.calc_inverse_diff(M_i)
-            self.norm_inv_diff += self.calc_norm_inv_diff(M_i)
-            self.inv_diff_moment += self.calc_inv_diff_moment(p_minus)
-            self.norm_inv_diff_moment += self.calc_norm_inv_diff_moment(p_minus)
-            self.inv_variance += self.calc_inv_variance(p_minus)
-
-            self.cor += self.calc_correlation(M_i)
-            self.autocor += self.calc_autocor(M_i)
-            self.cluster_tendency += self.calc_cluster_tendency_shade_prominence(M_i, 2)
-            self.cluster_shade += self.calc_cluster_tendency_shade_prominence(M_i, 3)
-            self.cluster_prominence += self.calc_cluster_tendency_shade_prominence(M_i, 4)
-
-            self.inf_cor_1 += self.calc_information_correlation_1(M_i)
-            self.inf_cor_2 += self.calc_information_correlation_2(M_i)
-
-        self.joint_max /= number_of_directions
-        self.joint_average /= number_of_directions
-        self.joint_var /= number_of_directions
-        self.joint_entropy /= number_of_directions
-
-        self.dif_average /= number_of_directions
-        self.dif_var /= number_of_directions
-        self.dif_entropy /= number_of_directions
-        self.sum_average /= number_of_directions
-        self.sum_var /= number_of_directions
-        self.sum_entropy /= number_of_directions
-
-        self.ang_second_moment /= number_of_directions
-        self.contrast /= number_of_directions
-        self.dissimilarity /= number_of_directions
-        self.inv_diff /= number_of_directions
-        self.norm_inv_diff /= number_of_directions
-        self.inv_diff_moment /= number_of_directions
-        self.norm_inv_diff_moment /= number_of_directions
-        self.inv_variance /= number_of_directions
-
-        self.cor /= number_of_directions
-        self.autocor /= number_of_directions
-        self.cluster_tendency /= number_of_directions
-        self.cluster_shade /= number_of_directions
-        self.cluster_prominence /= number_of_directions
-
-        self.inf_cor_1 /= number_of_directions
-        self.inf_cor_2 /= number_of_directions
+        for name in self.feature_names:
+            setattr(self, name, feature_sums[name] / number_of_directions)
 
     def calc_3d_averaged_glcm_features(self):
+        feature_sums = {name: 0 for name in self.feature_names}
+        n_dirs = len(self.glcm_3d_matrix)
 
-        nuber_of_dir_3D = 13
+        for glcm in self.glcm_3d_matrix:
+            features = self._calc_features_from_glcm(glcm)
+            for name in self.feature_names:
+                feature_sums[name] += features[name]
 
-        for glcm_i in self.glcm_3d_matrix:
-            norm = np.sum(glcm_i)
-            glcm_i = glcm_i / norm
-            self.joint_max += np.max(glcm_i)
-            glcm_i_joint_average = self.calc_joint_average(glcm_i)
-            self.joint_average += glcm_i_joint_average
-            self.joint_var += self.calc_joint_var(glcm_i, glcm_i_joint_average)
-            self.joint_entropy += self.calc_joint_entropy(glcm_i)
-
-            p_minus = self.calc_p_minus(glcm_i)
-            glcm_i_dif_average = self.calc_diff_average(p_minus)
-            self.dif_average += glcm_i_dif_average
-            self.dif_var += self.calc_dif_var(p_minus, glcm_i_dif_average)
-            self.dif_entropy += self.calc_diff_entropy(p_minus)
-
-            p_plus = self.calc_p_plus(glcm_i)
-            glcm_i_sum_average = self.calc_sum_average(p_plus)
-            self.sum_average += glcm_i_sum_average
-            self.sum_var += self.calc_sum_var(p_plus, glcm_i_sum_average)
-            self.sum_entropy += self.calc_sum_entropy(p_plus)
-
-            self.ang_second_moment += self.calc_second_moment(glcm_i)
-            self.contrast += self.calc_contrast(glcm_i)
-            self.dissimilarity += self.calc_dissimilarity(glcm_i)
-            self.inv_diff += self.calc_inverse_diff(glcm_i)
-            self.norm_inv_diff += self.calc_norm_inv_diff(glcm_i)
-            self.inv_diff_moment += self.calc_inv_diff_moment(p_minus)
-            self.norm_inv_diff_moment += self.calc_norm_inv_diff_moment(p_minus)
-            self.inv_variance += self.calc_inv_variance(p_minus)
-
-            self.cor += self.calc_correlation(glcm_i)
-            self.autocor += self.calc_autocor(glcm_i)
-            self.cluster_tendency += self.calc_cluster_tendency_shade_prominence(glcm_i, 2)
-            self.cluster_shade += self.calc_cluster_tendency_shade_prominence(glcm_i, 3)
-            self.cluster_prominence += self.calc_cluster_tendency_shade_prominence(glcm_i, 4)
-
-            self.inf_cor_1 += self.calc_information_correlation_1(glcm_i)
-            self.inf_cor_2 += self.calc_information_correlation_2(glcm_i)
-
-        self.joint_max /= nuber_of_dir_3D
-        self.joint_average /= nuber_of_dir_3D
-        self.joint_var /= nuber_of_dir_3D
-        self.joint_entropy /= nuber_of_dir_3D
-
-        self.dif_average /= nuber_of_dir_3D
-        self.dif_var /= nuber_of_dir_3D
-        self.dif_entropy /= nuber_of_dir_3D
-        self.sum_average /= nuber_of_dir_3D
-        self.sum_var /= nuber_of_dir_3D
-        self.sum_entropy /= nuber_of_dir_3D
-
-        self.ang_second_moment /= nuber_of_dir_3D
-        self.contrast /= nuber_of_dir_3D
-        self.dissimilarity /= nuber_of_dir_3D
-        self.inv_diff /= nuber_of_dir_3D
-        self.norm_inv_diff /= nuber_of_dir_3D
-        self.inv_diff_moment /= nuber_of_dir_3D
-        self.norm_inv_diff_moment /= nuber_of_dir_3D
-        self.inv_variance /= nuber_of_dir_3D
-
-        self.cor /= nuber_of_dir_3D
-        self.autocor /= nuber_of_dir_3D
-        self.cluster_tendency /= nuber_of_dir_3D
-        self.cluster_shade /= nuber_of_dir_3D
-        self.cluster_prominence /= nuber_of_dir_3D
-
-        self.inf_cor_1 /= nuber_of_dir_3D
-        self.inf_cor_2 /= nuber_of_dir_3D
+        for name in self.feature_names:
+            setattr(self, name, feature_sums[name] / n_dirs)
 
     def calc_3d_merged_glcm_features(self):
-
-        M = np.sum(self.glcm_3d_matrix, axis=0)
-        M = M / np.sum(M)
-
-        self.joint_max = np.max(M)
-        self.joint_average = self.calc_joint_average(M)
-        self.joint_var = self.calc_joint_var(M, self.joint_average)
-        self.joint_entropy = self.calc_joint_entropy(M)
-
-        p_minus = self.calc_p_minus(M)
-        M_dif_average = self.calc_diff_average(p_minus)
-        self.dif_average = M_dif_average
-        self.dif_var = self.calc_dif_var(p_minus, M_dif_average)
-        self.dif_entropy = self.calc_diff_entropy(p_minus)
-
-        p_plus = self.calc_p_plus(M)
-        M_sum_average = self.calc_sum_average(p_plus)
-        self.sum_average = M_sum_average
-        self.sum_var = self.calc_sum_var(p_plus, M_sum_average)
-        self.sum_entropy = self.calc_sum_entropy(p_plus)
-
-        self.ang_second_moment = self.calc_second_moment(M)
-        self.contrast = self.calc_contrast(M)
-        self.dissimilarity = self.calc_dissimilarity(M)
-        self.inv_diff = self.calc_inverse_diff(M)
-        self.norm_inv_diff = self.calc_norm_inv_diff(M)
-        self.inv_diff_moment = self.calc_inv_diff_moment(p_minus)
-        self.norm_inv_diff_moment = self.calc_norm_inv_diff_moment(p_minus)
-        self.inv_variance = self.calc_inv_variance(p_minus)
-
-        self.cor = self.calc_correlation(M)
-        self.autocor = self.calc_autocor(M)
-        self.cluster_tendency = self.calc_cluster_tendency_shade_prominence(M, 2)
-        self.cluster_shade = self.calc_cluster_tendency_shade_prominence(M, 3)
-        self.cluster_prominence = self.calc_cluster_tendency_shade_prominence(M, 4)
-
-        self.inf_cor_1 = self.calc_information_correlation_1(M)
-        self.inf_cor_2 = self.calc_information_correlation_2(M)
+        glcm = np.sum(self.glcm_3d_matrix, axis=0)
+        features = self._calc_features_from_glcm(glcm)
+        for name, value in features.items():
+            setattr(self, name, value)
 
 
