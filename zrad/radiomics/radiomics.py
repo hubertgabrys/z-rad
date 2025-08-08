@@ -5,6 +5,7 @@ import numpy as np
 from .morphological import MorphologicalFeatures
 from .local_intensity import LocalIntensityFeatures
 from .intensity_statistics import IntensityBasedStatFeatures
+from .intensity_histogram import IntensityHistogramFeatures
 from .intensity_volume_histogram import IntensityVolumeHistogramFeatures
 from .texture_glcm import GLCM
 from .texture_matrices import GLRLM_GLSZM_GLDZM_NGLDM
@@ -461,48 +462,48 @@ class Radiomics:
         if self.calc_discr_bin_number:
             self.patient_intensity_mask = self._bin_number_discr(self.patient_intensity_mask, self.bin_number)
 
-        discr_intensity_features = IntensityBasedStatFeatures()
-        discr_intensity_features.calc_mean_intensity(self.patient_intensity_mask.array)
-        discr_intensity_features.calc_intensity_variance(self.patient_intensity_mask.array)
-        discr_intensity_features.calc_intensity_skewness(self.patient_intensity_mask.array)
-        discr_intensity_features.calc_intensity_kurtosis(self.patient_intensity_mask.array)
-        discr_intensity_features.calc_median_intensity(self.patient_intensity_mask.array)
-        discr_intensity_features.calc_min_intensity(self.patient_intensity_mask.array)
-        discr_intensity_features.calc_intensity_10th_percentile(self.patient_intensity_mask.array)
-        discr_intensity_features.calc_intensity_90th_percentile(self.patient_intensity_mask.array)
-        discr_intensity_features.calc_max_intensity(self.patient_intensity_mask.array)
-        discr_intensity_features.calc_discretised_intensity_mode(self.patient_intensity_mask.array)
-        discr_intensity_features.calc_intensity_iqr(self.patient_intensity_mask.array)
-        discr_intensity_features.calc_intensity_range(self.patient_intensity_mask.array)
-        discr_intensity_features.calc_intensity_based_mean_abs_deviation(self.patient_intensity_mask.array)
-        discr_intensity_features.calc_intensity_based_robust_mean_abs_deviation(self.patient_intensity_mask.array)
-        discr_intensity_features.calc_intensity_based_median_abs_deviation(self.patient_intensity_mask.array)
-        discr_intensity_features.calc_intensity_based_variation_coef(self.patient_intensity_mask.array)
-        discr_intensity_features.calc_intensity_based_quartile_coef_dispersion(self.patient_intensity_mask.array)
-        discr_intensity_features.calc_discretised_intensity_entropy(self.patient_intensity_mask.array)
-        discr_intensity_features.calc_discretised_intensity_uniformity(self.patient_intensity_mask.array)
+        discr_intensity_features = IntensityHistogramFeatures()
+        discr_intensity_features.calc_mean_discret_intensity(self.patient_intensity_mask.array)
+        discr_intensity_features.calc_discret_intensity_variance(self.patient_intensity_mask.array)
+        discr_intensity_features.calc_discret_intensity_skewness(self.patient_intensity_mask.array)
+        discr_intensity_features.calc_discret_intensity_kurtosis(self.patient_intensity_mask.array)
+        discr_intensity_features.calc_median_discret_intensity(self.patient_intensity_mask.array)
+        discr_intensity_features.calc_minimum_discret_intensity(self.patient_intensity_mask.array)
+        discr_intensity_features.calc_discret_intensity_10th_percentile(self.patient_intensity_mask.array)
+        discr_intensity_features.calc_discret_intensity_90th_percentile(self.patient_intensity_mask.array)
+        discr_intensity_features.calc_maximum_discret_intensity(self.patient_intensity_mask.array)
+        discr_intensity_features.calc_intensity_hist_mode(self.patient_intensity_mask.array)
+        discr_intensity_features.calc_discret_intensity_iqr(self.patient_intensity_mask.array)
+        discr_intensity_features.calc_discret_intensity_range(self.patient_intensity_mask.array)
+        discr_intensity_features.calc_intensity_hist_mean_abs_deviation(self.patient_intensity_mask.array)
+        discr_intensity_features.calc_intensity_hist_robust_mean_abs_deviation(self.patient_intensity_mask.array)
+        discr_intensity_features.calc_intensity_hist_median_abs_deviation(self.patient_intensity_mask.array)
+        discr_intensity_features.calc_intensity_hist_variation_coef(self.patient_intensity_mask.array)
+        discr_intensity_features.calc_intensity_hist_quartile_coef_dispersion(self.patient_intensity_mask.array)
+        discr_intensity_features.calc_discret_intensity_entropy(self.patient_intensity_mask.array)
+        discr_intensity_features.calc_discret_intensity_uniformity(self.patient_intensity_mask.array)
         discr_intensity_features.calc_max_hist_gradient(self.patient_intensity_mask.array)  # 3.4.20
         discr_intensity_features.calc_max_hist_gradient_intensity(self.patient_intensity_mask.array)  # 3.4.21
         discr_intensity_features.calc_min_hist_gradient(self.patient_intensity_mask.array)  # 3.4.22
         discr_intensity_features.calc_min_hist_gradient_intensity(self.patient_intensity_mask.array)  # 3.4.23
 
-        self.discr_intensity_based_features = [discr_intensity_features.mean_intensity,
-                                               discr_intensity_features.intensity_variance,
-                                               discr_intensity_features.intensity_skewness,
-                                               discr_intensity_features.intensity_kurtosis,
-                                               discr_intensity_features.median_intensity,
-                                               discr_intensity_features.min_intensity,
-                                               discr_intensity_features.intensity_10th_percentile,
-                                               discr_intensity_features.intensity_90th_percentile,
-                                               discr_intensity_features.max_intensity,
+        self.discr_intensity_based_features = [discr_intensity_features.mean_discret_intensity,
+                                               discr_intensity_features.discret_intensity_variance,
+                                               discr_intensity_features.discret_intensity_skewness,
+                                               discr_intensity_features.discret_intensity_kurtosis,
+                                               discr_intensity_features.median_discret_intensity,
+                                               discr_intensity_features.minimum_discret_intensity,
+                                               discr_intensity_features.discret_intensity_10th_percentile,
+                                               discr_intensity_features.discret_intensity_90th_percentile,
+                                               discr_intensity_features.maximum_discret_intensity,
                                                discr_intensity_features.intensity_hist_mode,
-                                               discr_intensity_features.intensity_iqr,
-                                               discr_intensity_features.intensity_range,
-                                               discr_intensity_features.intensity_based_mean_abs_deviation,
-                                               discr_intensity_features.intensity_based_robust_mean_abs_deviation,
-                                               discr_intensity_features.intensity_based_median_abs_deviation,
-                                               discr_intensity_features.intensity_based_variation_coef,
-                                               discr_intensity_features.intensity_based_quartile_coef_dispersion,
+                                               discr_intensity_features.discret_intensity_iqr,
+                                               discr_intensity_features.discret_intensity_range,
+                                               discr_intensity_features.intensity_hist_mean_abs_deviation,
+                                               discr_intensity_features.intensity_hist_robust_mean_abs_deviation,
+                                               discr_intensity_features.intensity_hist_median_abs_deviation,
+                                               discr_intensity_features.intensity_hist_variation_coef,
+                                               discr_intensity_features.intensity_hist_quartile_coef_dispersion,
                                                discr_intensity_features.discret_intensity_entropy,
                                                discr_intensity_features.discret_intensity_uniformity,
                                                discr_intensity_features.max_hist_gradient,
