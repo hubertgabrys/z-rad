@@ -3,7 +3,7 @@ import sys
 import numpy as np
 
 from .morphological import MorphologicalFeatures
-from .local_intensity import LocalIntensityFeatures
+from .intensity_local import LocalIntensityFeatures
 from .intensity_statistics import IntensityBasedStatFeatures
 from .intensity_histogram import IntensityHistogramFeatures
 from .intensity_volume_histogram import IntensityVolumeHistogramFeatures
