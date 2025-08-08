@@ -156,35 +156,6 @@ class GLCM:
 
         self.glcm_3d_matrix = np.array(self.glcm_3d_matrix)
 
-    def calc_glcm_3d_matrix_my(self):
-        x, y, z = self.image.shape
-        directions = [(0, 0, 1), (0, 1, -1), (0, 1, 0),
-                      (0, 1, 1), (1, -1, -1), (1, -1, 0),
-                      (1, -1, 1), (1, 0, -1), (1, 0, 0),
-                      (1, 0, 1), (1, 1, -1), (1, 1, 0),
-                      (1, 1, 1)
-                      ]
-
-        self.glcm_3d_matrix = []
-        for direction in directions:
-            glcm = np.zeros((self.lvl, self.lvl))
-            for i in range(x):
-                for j in range(y):
-                    for k in range(z):
-                        if np.isnan(self.image[i, j, k]):
-                            continue  # Skip cells with np.nan
-
-                        dx, dy, dz = direction
-                        gr_lvl = int(self.image[i, j, k])
-
-                        new_i, new_j, new_k = i + dx, j + dy, k + dz
-                        if 0 <= new_i < x and 0 <= new_j < y and 0 <= new_k < z and not np.isnan(
-                                self.image[new_i, new_j, new_k]):
-                            glcm[gr_lvl, int(self.image[new_i, new_j, new_k])] += 1
-
-            self.glcm_3d_matrix.append(glcm + glcm.T)
-        self.glcm_3d_matrix = np.array(self.glcm_3d_matrix)
-
     def calc_p_minus(self, matrix):
         matrix = np.asarray(matrix)  # Ensure input is a NumPy array
         n_g = matrix.shape[0]
