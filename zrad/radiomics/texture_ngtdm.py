@@ -2,6 +2,10 @@ import numpy as np
 from scipy.ndimage import convolve
 
 
+# list of feature names calculated from the NGTDM matrix
+FEATURES = ("coarseness", "contrast", "busyness", "complexity", "strength")
+
+
 class NGTDM:
     def __init__(self, image, slice_weight=False, slice_median=False):
 
@@ -20,103 +24,75 @@ class NGTDM:
         self.ngtd_3d_matrix = None
         self.slice_no_of_roi_voxels = []
 
-        self.coarseness = 0
-        self.contrast = 0
-        self.busyness = 0
-        self.complexity = 0
-        self.strength = 0
+        # initialise feature attributes and containers in a generic way
+        self.feature_lists = {name: [] for name in FEATURES}
+        for name in FEATURES:
+            setattr(self, name, 0)
+            setattr(self, f"{name}_list", self.feature_lists[name])
 
-        self.coarsness_list = []
-        self.contrast_list = []
-        self.busyness_list = []
-        self.complexity_list = []
-        self.strength_list = []
+    def _calc_ngtdm(self, img, kernel):
+        """Calculate the NGTDM matrix for a provided image and kernel.
 
-    def calc_ngtd_3d_matrix(self):
-        img = self.image
-        # boolean mask of valid voxels
+        Parameters
+        ----------
+        img : ndarray
+            2D or 3D image slice with NaNs marking out-of-ROI voxels.
+        kernel : ndarray
+            Convolution kernel describing the neighbourhood (center must be 0).
+
+        Returns
+        -------
+        tuple (matrix, count)
+            The NGTDM matrix and number of valid voxels in ``img``.
+        """
         valid = ~np.isnan(img)
-        # fill NaNs with zero for the sum convolution
-        img_filled = np.where(valid, img, 0.0)
+        n_vox = int(valid.sum())
+        if n_vox == 0:
+            return np.zeros((self.lvl, 2), dtype=np.float64), 0
 
-        # 3×3×3 kernel of ones, with center zeroed
-        kernel = np.ones((3, 3, 3), dtype=np.int8)
-        kernel[1, 1, 1] = 0
+        filled = np.where(valid, img, 0.0)
+        neighbor_sum = convolve(filled, kernel, mode="constant", cval=0.0)
+        neighbor_count = convolve(valid.astype(np.int8), kernel, mode="constant", cval=0)
 
-        # sum of neighbor intensities
-        neighbor_sum = convolve(img_filled, kernel, mode='constant', cval=0.0)
-        # count of valid neighbors
-        neighbor_count = convolve(valid.astype(np.int8), kernel, mode='constant', cval=0)
-
-        # prepare output
         ngtdm = np.zeros((self.lvl, 2), dtype=np.float64)
-
         for lvl in range(self.lvl):
-            # voxels at this grey‐level
-            mask_lvl = (img == lvl)
-            # require at least one valid neighbor
-            mask_good = mask_lvl & (neighbor_count > 0)
-
-            n_i = np.count_nonzero(mask_good)
+            mask = (img == lvl) & (neighbor_count > 0)
+            n_i = int(mask.sum())
             if n_i > 0:
-                # mean neighbor value at each voxel
-                mean_nb = neighbor_sum[mask_good] / neighbor_count[mask_good]
-                # accumulate |i - μ_k|
-                s_i = np.sum(np.abs(lvl - mean_nb))
+                mean_nb = neighbor_sum[mask] / neighbor_count[mask]
+                s_i = np.abs(lvl - mean_nb).sum()
             else:
                 s_i = 0.0
-
             ngtdm[lvl, 0] = n_i
             ngtdm[lvl, 1] = s_i
 
-        self.ngtd_3d_matrix = ngtdm
+        return ngtdm, n_vox
+
+    def calc_ngtd_3d_matrix(self):
+        """Compute the 3‑D NGTDM matrix."""
+        kernel = np.ones((3, 3, 3), dtype=np.int8)
+        kernel[1, 1, 1] = 0
+        self.ngtd_3d_matrix, _ = self._calc_ngtdm(self.image, kernel)
 
     def calc_ngtd_2d_matrices(self):
-        # 3×3 kernel of ones with center zeroed
-        kernel2d = np.ones((3,3), dtype=np.int8)
-        kernel2d[1,1] = 0
+        """Compute the NGTDM matrix for each axial slice."""
+        kernel2d = np.ones((3, 3), dtype=np.int8)
+        kernel2d[1, 1] = 0
 
         slice_matrices = []
         slice_voxel_counts = []
 
         for z in self.range_z:
             sl = self.image[:, :, z]
-            valid = ~np.isnan(sl)
-            n_vox = valid.sum()
+            ngtdm_slice, n_vox = self._calc_ngtdm(sl, kernel2d)
             if n_vox == 0:
                 continue
-
-            # record how many ROI voxels in this slice
-            slice_voxel_counts.append(int(n_vox))
-
-            # replace NaNs with zero so they don't contribute to the sum
-            filled = np.where(valid, sl, 0.0)
-
-            # convolve to get per‑pixel neighbor sums and counts
-            neighbor_sum   = convolve(filled,       kernel2d, mode='constant', cval=0.0)
-            neighbor_count = convolve(valid.astype(np.int8),
-                                     kernel2d, mode='constant', cval=0)
-
-            # build the N_g × 2 matrix
-            ngtdm_slice = np.zeros((self.lvl, 2), dtype=np.float64)
-            for lvl in range(self.lvl):
-                # voxels at this grey level with ≥1 valid neighbour
-                mask = (sl == lvl) & (neighbor_count > 0)
-                n_i = mask.sum()
-                if n_i > 0:
-                    mean_nb = neighbor_sum[mask] / neighbor_count[mask]
-                    s_i = np.abs(lvl - mean_nb).sum()
-                else:
-                    s_i = 0.0
-
-                ngtdm_slice[lvl, 0] = n_i
-                ngtdm_slice[lvl, 1] = s_i
-
             slice_matrices.append(ngtdm_slice)
+            slice_voxel_counts.append(n_vox)
 
         # store results back into object
         self.slice_no_of_roi_voxels = slice_voxel_counts
-        self.ngtd_2d_matrices       = np.array(slice_matrices)
+        self.ngtd_2d_matrices = np.array(slice_matrices)
     def calc_coarseness(self, matrix):
         num = np.sum(matrix[:, 0])
         denum = 0
@@ -200,10 +176,15 @@ class NGTDM:
         else:
             return num / denum
 
+    def _calc_features(self, matrix):
+        """Calculate all texture features for a given NGTDM matrix."""
+        return {name: getattr(self, f"calc_{name}")(matrix) for name in FEATURES}
+
     def calc_2d_ngtdm_features(self):
 
         number_of_slices = self.ngtd_2d_matrices.shape[0]
         weights = []
+
         for i in range(number_of_slices):
             ngtdm_slice = self.ngtd_2d_matrices[i]
             weight = 1
@@ -211,25 +192,16 @@ class NGTDM:
                 weight = self.slice_no_of_roi_voxels[i] / self.tot_no_of_roi_voxels
             weights.append(weight)
 
-            self.coarsness_list.append(self.calc_coarseness(ngtdm_slice))
-            self.contrast_list.append(self.calc_contrast(ngtdm_slice))
-            self.busyness_list.append(self.calc_busyness(ngtdm_slice))
-            self.complexity_list.append(self.calc_complexity(ngtdm_slice))
-            self.strength_list.append(self.calc_strength(ngtdm_slice))
+            feats = self._calc_features(ngtdm_slice)
+            for name, value in feats.items():
+                self.feature_lists[name].append(value)
 
         if self.slice_median and not self.slice_weight:
-            self.coarseness = np.median(self.coarsness_list)
-            self.contrast = np.median(self.contrast_list)
-            self.busyness = np.median(self.busyness_list)
-            self.complexity = np.median(self.complexity_list)
-            self.strength = np.median(self.strength_list)
-
+            for name in FEATURES:
+                setattr(self, name, np.median(self.feature_lists[name]))
         elif not self.slice_median:
-            self.coarseness = np.average(self.coarsness_list, weights=weights)
-            self.contrast = np.average(self.contrast_list, weights=weights)
-            self.busyness = np.average(self.busyness_list, weights=weights)
-            self.complexity = np.average(self.complexity_list, weights=weights)
-            self.strength = np.average(self.strength_list, weights=weights)
+            for name in FEATURES:
+                setattr(self, name, np.average(self.feature_lists[name], weights=weights))
         else:
             print('Weighted median not supported. Aborted!')
             return
@@ -237,19 +209,12 @@ class NGTDM:
     def calc_2_5d_ngtdm_features(self):
 
         ngtdm_merged = np.sum(self.ngtd_2d_matrices, axis=0)
-
-        self.coarseness = self.calc_coarseness(ngtdm_merged)
-        self.contrast = self.calc_contrast(ngtdm_merged)
-        self.busyness = self.calc_busyness(ngtdm_merged)
-        self.complexity = self.calc_complexity(ngtdm_merged)
-        self.strength = self.calc_strength(ngtdm_merged)
+        feats = self._calc_features(ngtdm_merged)
+        for name, value in feats.items():
+            setattr(self, name, value)
 
     def calc_3d_ngtdm_features(self):
 
-        ngtdm = self.ngtd_3d_matrix
-
-        self.coarseness = self.calc_coarseness(ngtdm)
-        self.contrast = self.calc_contrast(ngtdm)
-        self.busyness = self.calc_busyness(ngtdm)
-        self.complexity = self.calc_complexity(ngtdm)
-        self.strength = self.calc_strength(ngtdm)
+        feats = self._calc_features(self.ngtd_3d_matrix)
+        for name, value in feats.items():
+            setattr(self, name, value)
