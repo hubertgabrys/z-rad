@@ -5,7 +5,10 @@ from .intensity_statistics import IntensityBasedStatFeatures
 from .intensity_histogram import IntensityHistogramFeatures
 from .intensity_volume_histogram import IntensityVolumeHistogramFeatures
 from .texture_glcm import GLCM
-from .texture_matrices import GLRLM_GLSZM_GLDZM_NGLDM
+from .glrlm import GLRLM
+from .glszm import GLSZM
+from .gldzm import GLDZM
+from .ngldm import NGLDM
 from .texture_ngtdm import NGTDM
 
 __all__ = [
@@ -16,6 +19,9 @@ __all__ = [
     "IntensityHistogramFeatures",
     "IntensityVolumeHistogramFeatures",
     "GLCM",
-    "GLRLM_GLSZM_GLDZM_NGLDM",
+    "GLRLM",
+    "GLSZM",
+    "GLDZM",
+    "NGLDM",
     "NGTDM",
 ]
