@@ -3,9 +3,12 @@ from .morphological import MorphologicalFeatures
 from .local_intensity import LocalIntensityFeatures
 from .intensity_statistics import IntensityBasedStatFeatures
 from .intensity_volume_histogram import IntensityVolumeHistogramFeatures
-from .texture_glcm import GLCM
-from .texture_matrices import GLRLM_GLSZM_GLDZM_NGLDM
-from .texture_ngtdm import NGTDM
+from .glcm import GLCM
+from .glrlm import GLRLM
+from .glszm import GLSZM
+from .gldzm import GLDZM
+from .ngtdm import NGTDM
+from .ngldm import NGLDM
 
 __all__ = [
     "Radiomics",
@@ -14,6 +17,9 @@ __all__ = [
     "IntensityBasedStatFeatures",
     "IntensityVolumeHistogramFeatures",
     "GLCM",
-    "GLRLM_GLSZM_GLDZM_NGLDM",
+    "GLRLM",
+    "GLSZM",
+    "GLDZM",
     "NGTDM",
+    "NGLDM",
 ]
