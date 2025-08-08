@@ -8,7 +8,7 @@ from .intensity_statistics import IntensityBasedStatFeatures
 from .intensity_histogram import IntensityHistogramFeatures
 from .intensity_volume_histogram import IntensityVolumeHistogramFeatures
 from .texture_glcm import GLCM
-from .texture_matrices import GLRLM_GLSZM_GLDZM_NGLDM
+from .texture_matrices import GLRLM, GLSZM, GLDZM, NGLDM
 from .texture_ngtdm import NGTDM
 from ..exceptions import DataStructureError
 from ..image import Image
@@ -560,8 +560,8 @@ class Radiomics:
                               glcm.inf_cor_1,
                               glcm.inf_cor_2]
         self.glcm_features_list.append(self.glcm_features)
-        glrlm = GLRLM_GLSZM_GLDZM_NGLDM(image=self.patient_intensity_mask.array.T, slice_weight=self.slice_weighting,
-                                        slice_median=self.slice_median)
+        glrlm = GLRLM(image=self.patient_intensity_mask.array.T, slice_weight=self.slice_weighting,
+                      slice_median=self.slice_median)
         if self.aggr_dim == '3D':
 
             glrlm.calc_glrl_3d_matrix()
@@ -600,134 +600,132 @@ class Radiomics:
                                glrlm.entropy]
         self.glrlm_features_list.append(self.glrlm_features)
 
-        glszm_gldzm = GLRLM_GLSZM_GLDZM_NGLDM(image=self.patient_intensity_mask.array.T,
-                                              slice_weight=self.slice_weighting, slice_median=self.slice_median)
+        glszm = GLSZM(image=self.patient_intensity_mask.array.T,
+                      slice_weight=self.slice_weighting, slice_median=self.slice_median)
+        gldzm = GLDZM(image=self.patient_intensity_mask.array.T,
+                      slice_weight=self.slice_weighting, slice_median=self.slice_median)
         if self.aggr_dim == '3D':
-            glszm_gldzm.calc_glsz_gldz_3d_matrices(self.patient_morphological_mask.array.T)
-            glszm_gldzm.calc_3d_glszm_features()
+            glszm.calc_glsz_gldz_3d_matrices(self.patient_morphological_mask.array.T)
+            glszm.calc_3d_glszm_features()
 
-            self.glszm_features = [glszm_gldzm.short_runs_emphasis,
-                                   glszm_gldzm.long_runs_emphasis,
-                                   glszm_gldzm.low_grey_level_run_emphasis,
-                                   glszm_gldzm.high_gr_lvl_emphasis,
-                                   glszm_gldzm.short_low_gr_lvl_emphasis,
-                                   glszm_gldzm.short_high_gr_lvl_emphasis,
-                                   glszm_gldzm.long_low_gr_lvl_emphasis,
-                                   glszm_gldzm.long_high_gr_lvl_emphasis,
-                                   glszm_gldzm.non_uniformity,
-                                   glszm_gldzm.norm_non_uniformity,
-                                   glszm_gldzm.length_non_uniformity,
-                                   glszm_gldzm.norm_length_non_uniformity,
-                                   glszm_gldzm.percentage,
-                                   glszm_gldzm.gr_lvl_var,
-                                   glszm_gldzm.length_var,
-                                   glszm_gldzm.entropy]
+            self.glszm_features = [glszm.short_runs_emphasis,
+                                   glszm.long_runs_emphasis,
+                                   glszm.low_grey_level_run_emphasis,
+                                   glszm.high_gr_lvl_emphasis,
+                                   glszm.short_low_gr_lvl_emphasis,
+                                   glszm.short_high_gr_lvl_emphasis,
+                                   glszm.long_low_gr_lvl_emphasis,
+                                   glszm.long_high_gr_lvl_emphasis,
+                                   glszm.non_uniformity,
+                                   glszm.norm_non_uniformity,
+                                   glszm.length_non_uniformity,
+                                   glszm.norm_length_non_uniformity,
+                                   glszm.percentage,
+                                   glszm.gr_lvl_var,
+                                   glszm.length_var,
+                                   glszm.entropy]
             self.glszm_features_list.append(self.glszm_features)
+            gldzm.calc_glsz_gldz_3d_matrices(self.patient_morphological_mask.array.T)
+            gldzm.calc_3d_gldzm_features()
 
-            glszm_gldzm.reset_fields()
-            glszm_gldzm.calc_3d_gldzm_features()
-
-            self.gldzm_features = [glszm_gldzm.short_runs_emphasis,
-                                   glszm_gldzm.long_runs_emphasis,
-                                   glszm_gldzm.low_grey_level_run_emphasis,
-                                   glszm_gldzm.high_gr_lvl_emphasis,
-                                   glszm_gldzm.short_low_gr_lvl_emphasis,
-                                   glszm_gldzm.short_high_gr_lvl_emphasis,
-                                   glszm_gldzm.long_low_gr_lvl_emphasis,
-                                   glszm_gldzm.long_high_gr_lvl_emphasis,
-                                   glszm_gldzm.non_uniformity,
-                                   glszm_gldzm.norm_non_uniformity,
-                                   glszm_gldzm.length_non_uniformity,
-                                   glszm_gldzm.norm_length_non_uniformity,
-                                   glszm_gldzm.percentage,
-                                   glszm_gldzm.gr_lvl_var,
-                                   glszm_gldzm.length_var,
-                                   glszm_gldzm.entropy]
+            self.gldzm_features = [gldzm.short_runs_emphasis,
+                                   gldzm.long_runs_emphasis,
+                                   gldzm.low_grey_level_run_emphasis,
+                                   gldzm.high_gr_lvl_emphasis,
+                                   gldzm.short_low_gr_lvl_emphasis,
+                                   gldzm.short_high_gr_lvl_emphasis,
+                                   gldzm.long_low_gr_lvl_emphasis,
+                                   gldzm.long_high_gr_lvl_emphasis,
+                                   gldzm.non_uniformity,
+                                   gldzm.norm_non_uniformity,
+                                   gldzm.length_non_uniformity,
+                                   gldzm.norm_length_non_uniformity,
+                                   gldzm.percentage,
+                                   gldzm.gr_lvl_var,
+                                   gldzm.length_var,
+                                   gldzm.entropy]
             self.gldzm_features_list.append(self.gldzm_features)
 
         else:
-            glszm_gldzm.calc_glsz_gldz_2d_matrices(self.patient_morphological_mask.array.T)
+            glszm.calc_glsz_gldz_2d_matrices(self.patient_morphological_mask.array.T)
+            gldzm.calc_glsz_gldz_2d_matrices(self.patient_morphological_mask.array.T)
             if self.aggr_dim == '2.5D':
-                glszm_gldzm.calc_2_5d_glszm_features()
+                glszm.calc_2_5d_glszm_features()
 
-                self.glszm_features = [glszm_gldzm.short_runs_emphasis,
-                                       glszm_gldzm.long_runs_emphasis,
-                                       glszm_gldzm.low_grey_level_run_emphasis,
-                                       glszm_gldzm.high_gr_lvl_emphasis,
-                                       glszm_gldzm.short_low_gr_lvl_emphasis,
-                                       glszm_gldzm.short_high_gr_lvl_emphasis,
-                                       glszm_gldzm.long_low_gr_lvl_emphasis,
-                                       glszm_gldzm.long_high_gr_lvl_emphasis,
-                                       glszm_gldzm.non_uniformity,
-                                       glszm_gldzm.norm_non_uniformity,
-                                       glszm_gldzm.length_non_uniformity,
-                                       glszm_gldzm.norm_length_non_uniformity,
-                                       glszm_gldzm.percentage,
-                                       glszm_gldzm.gr_lvl_var,
-                                       glszm_gldzm.length_var,
-                                       glszm_gldzm.entropy]
+                self.glszm_features = [glszm.short_runs_emphasis,
+                                       glszm.long_runs_emphasis,
+                                       glszm.low_grey_level_run_emphasis,
+                                       glszm.high_gr_lvl_emphasis,
+                                       glszm.short_low_gr_lvl_emphasis,
+                                       glszm.short_high_gr_lvl_emphasis,
+                                       glszm.long_low_gr_lvl_emphasis,
+                                       glszm.long_high_gr_lvl_emphasis,
+                                       glszm.non_uniformity,
+                                       glszm.norm_non_uniformity,
+                                       glszm.length_non_uniformity,
+                                       glszm.norm_length_non_uniformity,
+                                       glszm.percentage,
+                                       glszm.gr_lvl_var,
+                                       glszm.length_var,
+                                       glszm.entropy]
                 self.glszm_features_list.append(self.glszm_features)
+                gldzm.calc_2_5d_gldzm_features()
 
-                glszm_gldzm.reset_fields()
-                glszm_gldzm.calc_2_5d_gldzm_features()
-
-                self.gldzm_features = [glszm_gldzm.short_runs_emphasis,
-                                       glszm_gldzm.long_runs_emphasis,
-                                       glszm_gldzm.low_grey_level_run_emphasis,
-                                       glszm_gldzm.high_gr_lvl_emphasis,
-                                       glszm_gldzm.short_low_gr_lvl_emphasis,
-                                       glszm_gldzm.short_high_gr_lvl_emphasis,
-                                       glszm_gldzm.long_low_gr_lvl_emphasis,
-                                       glszm_gldzm.long_high_gr_lvl_emphasis,
-                                       glszm_gldzm.non_uniformity,
-                                       glszm_gldzm.norm_non_uniformity,
-                                       glszm_gldzm.length_non_uniformity,
-                                       glszm_gldzm.norm_length_non_uniformity,
-                                       glszm_gldzm.percentage,
-                                       glszm_gldzm.gr_lvl_var,
-                                       glszm_gldzm.length_var,
-                                       glszm_gldzm.entropy]
+                self.gldzm_features = [gldzm.short_runs_emphasis,
+                                       gldzm.long_runs_emphasis,
+                                       gldzm.low_grey_level_run_emphasis,
+                                       gldzm.high_gr_lvl_emphasis,
+                                       gldzm.short_low_gr_lvl_emphasis,
+                                       gldzm.short_high_gr_lvl_emphasis,
+                                       gldzm.long_low_gr_lvl_emphasis,
+                                       gldzm.long_high_gr_lvl_emphasis,
+                                       gldzm.non_uniformity,
+                                       gldzm.norm_non_uniformity,
+                                       gldzm.length_non_uniformity,
+                                       gldzm.norm_length_non_uniformity,
+                                       gldzm.percentage,
+                                       gldzm.gr_lvl_var,
+                                       gldzm.length_var,
+                                       gldzm.entropy]
                 self.gldzm_features_list.append(self.gldzm_features)
             else:
-                glszm_gldzm.calc_2d_glszm_features()
+                glszm.calc_2d_glszm_features()
 
-                self.glszm_features = [glszm_gldzm.short_runs_emphasis,
-                                       glszm_gldzm.long_runs_emphasis,
-                                       glszm_gldzm.low_grey_level_run_emphasis,
-                                       glszm_gldzm.high_gr_lvl_emphasis,
-                                       glszm_gldzm.short_low_gr_lvl_emphasis,
-                                       glszm_gldzm.short_high_gr_lvl_emphasis,
-                                       glszm_gldzm.long_low_gr_lvl_emphasis,
-                                       glszm_gldzm.long_high_gr_lvl_emphasis,
-                                       glszm_gldzm.non_uniformity,
-                                       glszm_gldzm.norm_non_uniformity,
-                                       glszm_gldzm.length_non_uniformity,
-                                       glszm_gldzm.norm_length_non_uniformity,
-                                       glszm_gldzm.percentage,
-                                       glszm_gldzm.gr_lvl_var,
-                                       glszm_gldzm.length_var,
-                                       glszm_gldzm.entropy]
+                self.glszm_features = [glszm.short_runs_emphasis,
+                                       glszm.long_runs_emphasis,
+                                       glszm.low_grey_level_run_emphasis,
+                                       glszm.high_gr_lvl_emphasis,
+                                       glszm.short_low_gr_lvl_emphasis,
+                                       glszm.short_high_gr_lvl_emphasis,
+                                       glszm.long_low_gr_lvl_emphasis,
+                                       glszm.long_high_gr_lvl_emphasis,
+                                       glszm.non_uniformity,
+                                       glszm.norm_non_uniformity,
+                                       glszm.length_non_uniformity,
+                                       glszm.norm_length_non_uniformity,
+                                       glszm.percentage,
+                                       glszm.gr_lvl_var,
+                                       glszm.length_var,
+                                       glszm.entropy]
                 self.glszm_features_list.append(self.glszm_features)
+                gldzm.calc_2d_gldzm_features()
 
-                glszm_gldzm.reset_fields()
-                glszm_gldzm.calc_2d_gldzm_features()
-
-                self.gldzm_features = [glszm_gldzm.short_runs_emphasis,
-                                       glszm_gldzm.long_runs_emphasis,
-                                       glszm_gldzm.low_grey_level_run_emphasis,
-                                       glszm_gldzm.high_gr_lvl_emphasis,
-                                       glszm_gldzm.short_low_gr_lvl_emphasis,
-                                       glszm_gldzm.short_high_gr_lvl_emphasis,
-                                       glszm_gldzm.long_low_gr_lvl_emphasis,
-                                       glszm_gldzm.long_high_gr_lvl_emphasis,
-                                       glszm_gldzm.non_uniformity,
-                                       glszm_gldzm.norm_non_uniformity,
-                                       glszm_gldzm.length_non_uniformity,
-                                       glszm_gldzm.norm_length_non_uniformity,
-                                       glszm_gldzm.percentage,
-                                       glszm_gldzm.gr_lvl_var,
-                                       glszm_gldzm.length_var,
-                                       glszm_gldzm.entropy]
+                self.gldzm_features = [gldzm.short_runs_emphasis,
+                                       gldzm.long_runs_emphasis,
+                                       gldzm.low_grey_level_run_emphasis,
+                                       gldzm.high_gr_lvl_emphasis,
+                                       gldzm.short_low_gr_lvl_emphasis,
+                                       gldzm.short_high_gr_lvl_emphasis,
+                                       gldzm.long_low_gr_lvl_emphasis,
+                                       gldzm.long_high_gr_lvl_emphasis,
+                                       gldzm.non_uniformity,
+                                       gldzm.norm_non_uniformity,
+                                       gldzm.length_non_uniformity,
+                                       gldzm.norm_length_non_uniformity,
+                                       gldzm.percentage,
+                                       gldzm.gr_lvl_var,
+                                       gldzm.length_var,
+                                       gldzm.entropy]
                 self.gldzm_features_list.append(self.gldzm_features)
 
         ngtdm = NGTDM(image=self.patient_intensity_mask.array.T, slice_weight=self.slice_weighting,
@@ -749,8 +747,8 @@ class Radiomics:
                                ngtdm.strength]
         self.ngtdm_features_list.append(self.ngtdm_features)
 
-        ngldm = GLRLM_GLSZM_GLDZM_NGLDM(image=self.patient_intensity_mask.array.T, slice_weight=self.slice_weighting,
-                                        slice_median=self.slice_median)
+        ngldm = NGLDM(image=self.patient_intensity_mask.array.T, slice_weight=self.slice_weighting,
+                      slice_median=self.slice_median)
         if self.aggr_dim == '3D':
             ngldm.calc_ngld_3d_matrix()
             ngldm.calc_3d_ngldm_features()
