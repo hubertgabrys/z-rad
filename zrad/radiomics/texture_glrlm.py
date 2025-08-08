@@ -52,52 +52,13 @@ class GLRLM:
         self.entropy_list = []
         self.energy_list = []
 
-    def reset_fields(self):
-
-        self.short_runs_emphasis = 0
-        self.long_runs_emphasis = 0
-        self.low_grey_level_run_emphasis = 0
-        self.high_gr_lvl_emphasis = 0
-        self.short_low_gr_lvl_emphasis = 0
-        self.short_high_gr_lvl_emphasis = 0
-        self.long_low_gr_lvl_emphasis = 0
-        self.long_high_gr_lvl_emphasis = 0
-        self.non_uniformity = 0
-        self.norm_non_uniformity = 0
-        self.length_non_uniformity = 0
-        self.norm_length_non_uniformity = 0
-        self.percentage = 0
-        self.gr_lvl_var = 0
-        self.length_var = 0
-        self.entropy = 0
-        self.energy = 0
-
-        self.short_runs_emphasis_list = []
-        self.long_runs_emphasis_list = []
-        self.low_grey_level_run_emphasis_list = []
-        self.high_gr_lvl_emphasis_list = []
-        self.short_low_gr_lvl_emphasis_list = []
-        self.short_high_gr_lvl_emphasis_list = []
-        self.long_low_gr_lvl_emphasis_list = []
-        self.long_high_gr_lvl_emphasis_list = []
-        self.non_uniformity_list = []
-        self.norm_non_uniformity_list = []
-        self.length_non_uniformity_list = []
-        self.norm_length_non_uniformity_list = []
-        self.percentage_list = []
-        self.gr_lvl_var_list = []
-        self.length_var_list = []
-        self.entropy_list = []
-        self.energy_list = []
-
-    def rle_1d(self, arr, lvl, rlm):
+    def rle_1d(self, arr, rlm):
         """
         Run‐length encode a 1D array of gray levels (with NaNs as breaks)
         and update the provided run‐length matrix.
 
         Parameters:
           arr: 1D numpy array (can contain np.nan)
-          lvl: int, number of gray levels (assumed that valid pixel values are in 0..lvl-1)
           rlm: 2D numpy array of shape (lvl, max_length) to be updated in-place.
         """
         # Find indices of valid (non-NaN) entries.
@@ -144,7 +105,7 @@ class GLRLM:
         rlm = np.zeros((lvl, max(rows, cols)), dtype=int)
         for i in range(rows):
             row = z_slice[i, :]
-            self.rle_1d(row, lvl, rlm)
+            self.rle_1d(row, rlm)
         return rlm
 
     def process_vertical(self, z_slice, lvl):
@@ -155,7 +116,7 @@ class GLRLM:
         rlm = np.zeros((lvl, max(rows, cols)), dtype=int)
         for j in range(cols):
             col = z_slice[:, j]
-            self.rle_1d(col, lvl, rlm)
+            self.rle_1d(col, rlm)
         return rlm
 
     def process_diagonal(self, z_slice, lvl):
@@ -167,7 +128,7 @@ class GLRLM:
         # Diagonals: offsets from -(rows-1) to (cols-1)
         for offset in range(-rows + 1, cols):
             diag = np.diagonal(z_slice, offset=offset)
-            self.rle_1d(diag, lvl, rlm)
+            self.rle_1d(diag, rlm)
         return rlm
 
     def process_antidiagonal(self, z_slice, lvl):
@@ -180,7 +141,7 @@ class GLRLM:
         flipped = np.fliplr(z_slice)
         for offset in range(-rows + 1, cols):
             diag = np.diagonal(flipped, offset=offset)
-            self.rle_1d(diag, lvl, rlm)
+            self.rle_1d(diag, rlm)
         return rlm
 
     def calc_glrl_2d_matrices(self):

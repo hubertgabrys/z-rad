@@ -8,7 +8,6 @@ from .intensity_statistics import IntensityBasedStatFeatures
 from .intensity_histogram import IntensityHistogramFeatures
 from .intensity_volume_histogram import IntensityVolumeHistogramFeatures
 from .texture_glcm import GLCM
-# from .texture_matrices import GLRLM_GLSZM_GLDZM_NGLDM
 from .texture_gldzm import GLDZM
 from .texture_glszm import GLSZM
 from .texture_glrlm import GLRLM
@@ -629,8 +628,6 @@ class Radiomics:
                                    glszm.entropy]
             self.glszm_features_list.append(self.glszm_features)
 
-            glszm.reset_fields()
-
         else:
             glszm.calc_glsz_2d_matrices(self.patient_morphological_mask.array.T)
             if self.aggr_dim == '2.5D':
@@ -653,8 +650,6 @@ class Radiomics:
                                        glszm.length_var,
                                        glszm.entropy]
                 self.glszm_features_list.append(self.glszm_features)
-
-                glszm.reset_fields()
             else:
                 glszm.calc_2d_glszm_features()
 
@@ -675,8 +670,6 @@ class Radiomics:
                                        glszm.length_var,
                                        glszm.entropy]
                 self.glszm_features_list.append(self.glszm_features)
-
-                glszm.reset_fields()
 
         # GLDZM
         gldzm = GLDZM(image=self.patient_intensity_mask.array.T,

@@ -53,44 +53,6 @@ class GLDZM:
         self.entropy_list = []
         self.energy_list = []
 
-    def reset_fields(self):
-
-        self.short_runs_emphasis = 0
-        self.long_runs_emphasis = 0
-        self.low_grey_level_run_emphasis = 0
-        self.high_gr_lvl_emphasis = 0
-        self.short_low_gr_lvl_emphasis = 0
-        self.short_high_gr_lvl_emphasis = 0
-        self.long_low_gr_lvl_emphasis = 0
-        self.long_high_gr_lvl_emphasis = 0
-        self.non_uniformity = 0
-        self.norm_non_uniformity = 0
-        self.length_non_uniformity = 0
-        self.norm_length_non_uniformity = 0
-        self.percentage = 0
-        self.gr_lvl_var = 0
-        self.length_var = 0
-        self.entropy = 0
-        self.energy = 0
-
-        self.short_runs_emphasis_list = []
-        self.long_runs_emphasis_list = []
-        self.low_grey_level_run_emphasis_list = []
-        self.high_gr_lvl_emphasis_list = []
-        self.short_low_gr_lvl_emphasis_list = []
-        self.short_high_gr_lvl_emphasis_list = []
-        self.long_low_gr_lvl_emphasis_list = []
-        self.long_high_gr_lvl_emphasis_list = []
-        self.non_uniformity_list = []
-        self.norm_non_uniformity_list = []
-        self.length_non_uniformity_list = []
-        self.norm_length_non_uniformity_list = []
-        self.percentage_list = []
-        self.gr_lvl_var_list = []
-        self.length_var_list = []
-        self.entropy_list = []
-        self.energy_list = []
-
     def calc_gldz_3d_matrices(self, mask):
 
         flattened_array = self.image.flatten()

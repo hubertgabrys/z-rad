@@ -9,7 +9,6 @@ from .texture_gldzm import GLDZM
 from .texture_glszm import GLSZM
 from .texture_glrlm import GLRLM
 from .texture_ngldm import NGLDM
-# from .texture_matrices import GLRLM_GLSZM_GLDZM_NGLDM
 from .texture_ngtdm import NGTDM
 
 __all__ = [
