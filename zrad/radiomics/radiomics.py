@@ -2,8 +2,7 @@ import sys
 
 import numpy as np
 
-from .radiomics_definitions import MorphologicalFeatures, LocalIntensityFeatures, IntensityBasedStatFeatures, GLCM, \
-    GLRLM_GLSZM_GLDZM_NGLDM, NGTDM, IntensityVolumeHistogramFeatures
+from .features import MorphologicalFeatures, LocalIntensityFeatures, IntensityBasedStatFeatures, IntensityVolumeHistogramFeatures, GLCM, GLRLM_GLSZM_GLDZM_NGLDM, NGTDM
 from ..exceptions import DataStructureError
 from ..image import Image
 from ..toolbox_logic import handle_uncaught_exception
