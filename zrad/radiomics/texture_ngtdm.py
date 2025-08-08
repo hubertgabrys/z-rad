@@ -1,13 +1,5 @@
 import numpy as np
 from scipy.ndimage import convolve
-from scipy.ndimage import distance_transform_cdt, label, generate_binary_structure, minimum
-from scipy.ndimage.morphology import generate_binary_structure
-from scipy.spatial.distance import pdist, squareform
-from scipy.spatial import ConvexHull
-from scipy.special import legendre
-from scipy.stats import iqr, skew, kurtosis
-from skimage import measure
-from sklearn.decomposition import PCA
 
 
 class NGTDM:
