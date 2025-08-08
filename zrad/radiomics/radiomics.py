@@ -2,7 +2,13 @@ import sys
 
 import numpy as np
 
-from .features import MorphologicalFeatures, LocalIntensityFeatures, IntensityBasedStatFeatures, IntensityVolumeHistogramFeatures, GLCM, GLRLM_GLSZM_GLDZM_NGLDM, NGTDM
+from .morphological import MorphologicalFeatures
+from .local_intensity import LocalIntensityFeatures
+from .intensity_statistics import IntensityBasedStatFeatures
+from .intensity_volume_histogram import IntensityVolumeHistogramFeatures
+from .texture_glcm import GLCM
+from .texture_matrices import GLRLM_GLSZM_GLDZM_NGLDM
+from .texture_ngtdm import NGTDM
 from ..exceptions import DataStructureError
 from ..image import Image
 from ..toolbox_logic import handle_uncaught_exception
