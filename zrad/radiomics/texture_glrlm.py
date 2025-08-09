@@ -1,56 +1,40 @@
 import numpy as np
 
+from .texture_base import TextureFeatureBase
 
-class GLRLM:
+
+class GLRLM(TextureFeatureBase):
+    FEATURE_NAMES = [
+        "short_runs_emphasis",
+        "long_runs_emphasis",
+        "low_grey_level_run_emphasis",
+        "high_gr_lvl_emphasis",
+        "short_low_gr_lvl_emphasis",
+        "short_high_gr_lvl_emphasis",
+        "long_low_gr_lvl_emphasis",
+        "long_high_gr_lvl_emphasis",
+        "non_uniformity",
+        "norm_non_uniformity",
+        "length_non_uniformity",
+        "norm_length_non_uniformity",
+        "percentage",
+        "gr_lvl_var",
+        "length_var",
+        "entropy",
+        "energy",
+    ]
+
     def __init__(self, image, slice_weight=False, slice_median=False):
 
-        self.image = image  # Import image as (x, y, z) array
+        super().__init__(image, self.FEATURE_NAMES, slice_weight, slice_median)
         self.lvl = int(np.nanmax(self.image) + 1)
         self.tot_no_of_roi_voxels = np.sum(~np.isnan(image))
-        self.slice_weight = slice_weight
-        self.slice_median = slice_median
 
         x_indices, y_indices, z_indices = np.where(~np.isnan(self.image))
 
         self.range_x = np.unique(x_indices)
         self.range_y = np.unique(y_indices)
         self.range_z = np.unique(z_indices)
-
-        self.short_runs_emphasis = 0
-        self.long_runs_emphasis = 0
-        self.low_grey_level_run_emphasis = 0
-        self.high_gr_lvl_emphasis = 0
-        self.short_low_gr_lvl_emphasis = 0
-        self.short_high_gr_lvl_emphasis = 0
-        self.long_low_gr_lvl_emphasis = 0
-        self.long_high_gr_lvl_emphasis = 0
-        self.non_uniformity = 0
-        self.norm_non_uniformity = 0
-        self.length_non_uniformity = 0
-        self.norm_length_non_uniformity = 0
-        self.percentage = 0
-        self.gr_lvl_var = 0
-        self.length_var = 0
-        self.entropy = 0
-        self.energy = 0
-
-        self.short_runs_emphasis_list = []
-        self.long_runs_emphasis_list = []
-        self.low_grey_level_run_emphasis_list = []
-        self.high_gr_lvl_emphasis_list = []
-        self.short_low_gr_lvl_emphasis_list = []
-        self.short_high_gr_lvl_emphasis_list = []
-        self.long_low_gr_lvl_emphasis_list = []
-        self.long_high_gr_lvl_emphasis_list = []
-        self.non_uniformity_list = []
-        self.norm_non_uniformity_list = []
-        self.length_non_uniformity_list = []
-        self.norm_length_non_uniformity_list = []
-        self.percentage_list = []
-        self.gr_lvl_var_list = []
-        self.length_var_list = []
-        self.entropy_list = []
-        self.energy_list = []
 
     def rle_1d(self, arr, rlm):
         """
@@ -353,7 +337,30 @@ class GLRLM:
 
         return np.sum((M[mask] / Ns) ** 2)
 
+    def _calc_features_from_matrix(self, M, roi_voxels):
+        """Calculate all GLRLM features for a given matrix ``M``."""
+        return {
+            "short_runs_emphasis": self.calc_short_emphasis(M),
+            "long_runs_emphasis": self.calc_long_emphasis(M),
+            "low_grey_level_run_emphasis": self.calc_low_gr_lvl_emphasis(M),
+            "high_gr_lvl_emphasis": self.calc_high_gr_lvl_emphasis(M),
+            "short_low_gr_lvl_emphasis": self.calc_short_low_gr_lvl_emphasis(M),
+            "short_high_gr_lvl_emphasis": self.calc_short_high_gr_lvl_emphasis(M),
+            "long_low_gr_lvl_emphasis": self.calc_long_low_gr_lvl_emphasis(M),
+            "long_high_gr_lvl_emphasis": self.calc_long_high_gr_lvl_emphasis(M),
+            "non_uniformity": self.calc_non_uniformity(M),
+            "norm_non_uniformity": self.calc_norm_non_uniformity(M),
+            "length_non_uniformity": self.calc_length_non_uniformity(M),
+            "norm_length_non_uniformity": self.calc_norm_length_non_uniformity(M),
+            "percentage": self.calc_percentage(M, roi_voxels),
+            "gr_lvl_var": self.calc_gr_lvl_var(M),
+            "length_var": self.calc_length_var(M),
+            "entropy": self.calc_entropy(M),
+            "energy": self.calc_energy(M),
+        }
+
     def calc_2d_averaged_glrlm_features(self):
+        self._reset_feature_lists()
 
         number_of_slices = self.glrlm_2D_matrices.shape[0]
         number_of_directions = self.glrlm_2D_matrices.shape[1]
@@ -367,63 +374,17 @@ class GLRLM:
                     weight = self.no_of_roi_voxels[i] / self.tot_no_of_roi_voxels
                 weights.append(weight)
 
-                self.short_runs_emphasis_list.append(self.calc_short_emphasis(M_ij))
-                self.long_runs_emphasis_list.append(self.calc_long_emphasis(M_ij))
-                self.low_grey_level_run_emphasis_list.append(self.calc_low_gr_lvl_emphasis(M_ij))
-                self.high_gr_lvl_emphasis_list.append(self.calc_high_gr_lvl_emphasis(M_ij))
-                self.short_low_gr_lvl_emphasis_list.append(self.calc_short_low_gr_lvl_emphasis(M_ij))
-                self.short_high_gr_lvl_emphasis_list.append(self.calc_short_high_gr_lvl_emphasis(M_ij))
-                self.long_low_gr_lvl_emphasis_list.append(self.calc_long_low_gr_lvl_emphasis(M_ij))
-                self.long_high_gr_lvl_emphasis_list.append(self.calc_long_high_gr_lvl_emphasis(M_ij))
-                self.non_uniformity_list.append(self.calc_non_uniformity(M_ij))
-                self.norm_non_uniformity_list.append(self.calc_norm_non_uniformity(M_ij))
-                self.length_non_uniformity_list.append(self.calc_length_non_uniformity(M_ij))
-                self.norm_length_non_uniformity_list.append(self.calc_norm_length_non_uniformity(M_ij))
-                self.percentage_list.append(self.calc_percentage(M_ij, self.no_of_roi_voxels[i]))
-                self.gr_lvl_var_list.append(self.calc_gr_lvl_var(M_ij))
-                self.length_var_list.append(self.calc_length_var(M_ij))
-                self.entropy_list.append(self.calc_entropy(M_ij))
+                feats = self._calc_features_from_matrix(M_ij, self.no_of_roi_voxels[i])
+                self._append_features(feats)
 
-        if self.slice_median and not self.slice_weight:
-            self.short_runs_emphasis = np.median(self.short_runs_emphasis_list)
-            self.long_runs_emphasis = np.median(self.long_runs_emphasis_list)
-            self.low_grey_level_run_emphasis = np.median(self.low_grey_level_run_emphasis_list)
-            self.high_gr_lvl_emphasis = np.median(self.high_gr_lvl_emphasis_list)
-            self.short_low_gr_lvl_emphasis = np.median(self.short_low_gr_lvl_emphasis_list)
-            self.short_high_gr_lvl_emphasis = np.median(self.short_high_gr_lvl_emphasis_list)
-            self.long_low_gr_lvl_emphasis = np.median(self.long_low_gr_lvl_emphasis_list)
-            self.long_high_gr_lvl_emphasis = np.median(self.long_high_gr_lvl_emphasis_list)
-            self.non_uniformity = np.median(self.non_uniformity_list)
-            self.norm_non_uniformity = np.median(self.norm_non_uniformity_list)
-            self.length_non_uniformity = np.median(self.length_non_uniformity_list)
-            self.norm_length_non_uniformity = np.median(self.norm_length_non_uniformity_list)
-            self.percentage = np.median(self.percentage_list)
-            self.gr_lvl_var = np.median(self.gr_lvl_var_list)
-            self.length_var = np.median(self.length_var_list)
-            self.entropy = np.median(self.entropy_list)
-        elif not self.slice_median:
-            self.short_runs_emphasis = np.average(self.short_runs_emphasis_list, weights=weights)
-            self.long_runs_emphasis = np.average(self.long_runs_emphasis_list, weights=weights)
-            self.low_grey_level_run_emphasis = np.average(self.low_grey_level_run_emphasis_list, weights=weights)
-            self.high_gr_lvl_emphasis = np.average(self.high_gr_lvl_emphasis_list, weights=weights)
-            self.short_low_gr_lvl_emphasis = np.average(self.short_low_gr_lvl_emphasis_list, weights=weights)
-            self.short_high_gr_lvl_emphasis = np.average(self.short_high_gr_lvl_emphasis_list, weights=weights)
-            self.long_low_gr_lvl_emphasis = np.average(self.long_low_gr_lvl_emphasis_list, weights=weights)
-            self.long_high_gr_lvl_emphasis = np.average(self.long_high_gr_lvl_emphasis_list, weights=weights)
-            self.non_uniformity = np.average(self.non_uniformity_list, weights=weights)
-            self.norm_non_uniformity = np.average(self.norm_non_uniformity_list, weights=weights)
-            self.length_non_uniformity = np.average(self.length_non_uniformity_list, weights=weights)
-            self.norm_length_non_uniformity = np.average(self.norm_length_non_uniformity_list, weights=weights)
-            self.percentage = np.average(self.percentage_list, weights=weights)
-            self.gr_lvl_var = np.average(self.gr_lvl_var_list, weights=weights)
-            self.length_var = np.average(self.length_var_list, weights=weights)
-            self.entropy = np.average(self.entropy_list, weights=weights)
+        self._finalize_features(weights)
 
     def calc_2d_slice_merged_glrlm_features(self):
+        self._reset_feature_lists()
 
         number_of_slices = self.glrlm_2D_matrices.shape[0]
         number_of_directions = self.glrlm_2D_matrices.shape[1]
-        averaged_M = np.sum(self.glrlm_2D_matrices, axis=1)  # / number_of_directions
+        averaged_M = np.sum(self.glrlm_2D_matrices, axis=1)
         weights = []
 
         for i in range(number_of_slices):
@@ -433,58 +394,14 @@ class GLRLM:
                 weight = self.no_of_roi_voxels[i] / self.tot_no_of_roi_voxels
             weights.append(weight)
 
-            self.short_runs_emphasis_list.append(self.calc_short_emphasis(M_i))
-            self.long_runs_emphasis_list.append(self.calc_long_emphasis(M_i))
-            self.low_grey_level_run_emphasis_list.append(self.calc_low_gr_lvl_emphasis(M_i))
-            self.high_gr_lvl_emphasis_list.append(self.calc_high_gr_lvl_emphasis(M_i))
-            self.short_low_gr_lvl_emphasis_list.append(self.calc_short_low_gr_lvl_emphasis(M_i))
-            self.short_high_gr_lvl_emphasis_list.append(self.calc_short_high_gr_lvl_emphasis(M_i))
-            self.long_low_gr_lvl_emphasis_list.append(self.calc_long_low_gr_lvl_emphasis(M_i))
-            self.long_high_gr_lvl_emphasis_list.append(self.calc_long_high_gr_lvl_emphasis(M_i))
-            self.non_uniformity_list.append(self.calc_non_uniformity(M_i))
-            self.norm_non_uniformity_list.append(self.calc_norm_non_uniformity(M_i))
-            self.length_non_uniformity_list.append(self.calc_length_non_uniformity(M_i))
-            self.norm_length_non_uniformity_list.append(self.calc_norm_length_non_uniformity(M_i))
-            self.percentage_list.append(
-                self.calc_percentage(M_i, self.no_of_roi_voxels[i]) * (1 / number_of_directions))
-            self.gr_lvl_var_list.append(self.calc_gr_lvl_var(M_i))
-            self.length_var_list.append(self.calc_length_var(M_i))
-            self.entropy_list.append(self.calc_entropy(M_i))
+            feats = self._calc_features_from_matrix(
+                M_i, self.no_of_roi_voxels[i]
+            )
+            # percentage needs scaling by number_of_directions
+            feats["percentage"] *= 1 / number_of_directions
+            self._append_features(feats)
 
-        if self.slice_median and not self.slice_weight:
-            self.short_runs_emphasis = np.median(self.short_runs_emphasis_list)
-            self.long_runs_emphasis = np.median(self.long_runs_emphasis_list)
-            self.low_grey_level_run_emphasis = np.median(self.low_grey_level_run_emphasis_list)
-            self.high_gr_lvl_emphasis = np.median(self.high_gr_lvl_emphasis_list)
-            self.short_low_gr_lvl_emphasis = np.median(self.short_low_gr_lvl_emphasis_list)
-            self.short_high_gr_lvl_emphasis = np.median(self.short_high_gr_lvl_emphasis_list)
-            self.long_low_gr_lvl_emphasis = np.median(self.long_low_gr_lvl_emphasis_list)
-            self.long_high_gr_lvl_emphasis = np.median(self.long_high_gr_lvl_emphasis_list)
-            self.non_uniformity = np.median(self.non_uniformity_list)
-            self.norm_non_uniformity = np.median(self.norm_non_uniformity_list)
-            self.length_non_uniformity = np.median(self.length_non_uniformity_list)
-            self.norm_length_non_uniformity = np.median(self.norm_length_non_uniformity_list)
-            self.percentage = np.median(self.percentage_list)
-            self.gr_lvl_var = np.median(self.gr_lvl_var_list)
-            self.length_var = np.median(self.length_var_list)
-            self.entropy = np.median(self.entropy_list)
-        elif not self.slice_median:
-            self.short_runs_emphasis = np.average(self.short_runs_emphasis_list, weights=weights)
-            self.long_runs_emphasis = np.average(self.long_runs_emphasis_list, weights=weights)
-            self.low_grey_level_run_emphasis = np.average(self.low_grey_level_run_emphasis_list, weights=weights)
-            self.high_gr_lvl_emphasis = np.average(self.high_gr_lvl_emphasis_list, weights=weights)
-            self.short_low_gr_lvl_emphasis = np.average(self.short_low_gr_lvl_emphasis_list, weights=weights)
-            self.short_high_gr_lvl_emphasis = np.average(self.short_high_gr_lvl_emphasis_list, weights=weights)
-            self.long_low_gr_lvl_emphasis = np.average(self.long_low_gr_lvl_emphasis_list, weights=weights)
-            self.long_high_gr_lvl_emphasis = np.average(self.long_high_gr_lvl_emphasis_list, weights=weights)
-            self.non_uniformity = np.average(self.non_uniformity_list, weights=weights)
-            self.norm_non_uniformity = np.average(self.norm_non_uniformity_list, weights=weights)
-            self.length_non_uniformity = np.average(self.length_non_uniformity_list, weights=weights)
-            self.norm_length_non_uniformity = np.average(self.norm_length_non_uniformity_list, weights=weights)
-            self.percentage = np.average(self.percentage_list, weights=weights)
-            self.gr_lvl_var = np.average(self.gr_lvl_var_list, weights=weights)
-            self.length_var = np.average(self.length_var_list, weights=weights)
-            self.entropy = np.average(self.entropy_list, weights=weights)
+        self._finalize_features(weights)
 
     def calc_2_5d_merged_glrlm_features(self):
 
