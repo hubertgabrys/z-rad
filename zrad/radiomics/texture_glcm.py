@@ -1,63 +1,48 @@
 import numpy as np
 
+from .texture_base import TextureFeatureBase
 
-class GLCM:
+
+class GLCM(TextureFeatureBase):
+
+    FEATURE_NAMES = [
+        "joint_max",
+        "joint_average",
+        "joint_var",
+        "joint_entropy",
+        "dif_average",
+        "dif_var",
+        "dif_entropy",
+        "sum_average",
+        "sum_var",
+        "sum_entropy",
+        "ang_second_moment",
+        "contrast",
+        "dissimilarity",
+        "inv_diff",
+        "norm_inv_diff",
+        "inv_diff_moment",
+        "norm_inv_diff_moment",
+        "inv_variance",
+        "cor",
+        "autocor",
+        "cluster_tendency",
+        "cluster_shade",
+        "cluster_prominence",
+        "inf_cor_1",
+        "inf_cor_2",
+    ]
 
     def __init__(self, image, slice_weight=False, slice_median=False):
-        self.image = image
-        self.slice_weight = slice_weight
-        self.slice_median = slice_median
+        super().__init__(image, self.FEATURE_NAMES, slice_weight, slice_median)
         self.lvl = int(np.nanmax(self.image) + 1)
-        self.glcm_2d_matrices = None
-        self.glcm_3d_matrix = None
-
         self.glcm_2d_matrices = []
+        self.glcm_3d_matrix = None
         self.slice_no_of_roi_voxels = []
-
-        # Feature names used across the class. The first 25 match the benchmark
-        # feature numbers used in the original implementation.
-        self.feature_names = [
-            "joint_max",
-            "joint_average",
-            "joint_var",
-            "joint_entropy",
-            "dif_average",
-            "dif_var",
-            "dif_entropy",
-            "sum_average",
-            "sum_var",
-            "sum_entropy",
-            "ang_second_moment",
-            "contrast",
-            "dissimilarity",
-            "inv_diff",
-            "norm_inv_diff",
-            "inv_diff_moment",
-            "norm_inv_diff_moment",
-            "inv_variance",
-            "cor",
-            "autocor",
-            "cluster_tendency",
-            "cluster_shade",
-            "cluster_prominence",
-            "inf_cor_1",
-            "inf_cor_2",
-        ]
-
-        # Dynamically create attributes for feature values and per-slice lists
-        # to avoid repetitive code.
-        for name in self.feature_names:
-            setattr(self, name, 0)
-            setattr(self, f"{name}_list", [])
 
     # ------------------------------------------------------------------
     # Helper utilities
     # ------------------------------------------------------------------
-
-    def _reset_feature_lists(self):
-        """Clear all feature lists used for intermediate calculations."""
-        for name in self.feature_names:
-            getattr(self, f"{name}_list").clear()
 
     def _calc_features_from_glcm(self, glcm):
         """Calculate all features for a single GLCM matrix.
@@ -110,30 +95,9 @@ class GLCM:
         return features
 
     def _append_features(self, glcm):
-        """Compute features for ``glcm`` and append them to the lists."""
+        """Compute features for ``glcm`` and append them using the base util."""
         features = self._calc_features_from_glcm(glcm)
-        for name, value in features.items():
-            getattr(self, f"{name}_list").append(value)
-
-    def _finalize_features(self, weights):
-        """Finalize feature values from stored lists using ``weights``.
-
-        Depending on ``slice_median`` and ``slice_weight`` the features are
-        aggregated using a median or a weighted average.
-        """
-
-        if self.slice_median and not self.slice_weight:
-            for name in self.feature_names:
-                setattr(self, name, np.median(getattr(self, f"{name}_list")))
-        elif not self.slice_median:
-            for name in self.feature_names:
-                setattr(
-                    self,
-                    name,
-                    np.average(getattr(self, f"{name}_list"), weights=weights),
-                )
-        else:
-            print("Weighted median not supported. Aborted!")
+        super()._append_features(features)
 
     # ------------------------------------------------------------------
     # Original public API
