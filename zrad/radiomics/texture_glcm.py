@@ -136,89 +136,90 @@ class GLCM:
             print("Weighted median not supported. Aborted!")
 
     # ------------------------------------------------------------------
+    # Common GLCM computation
+    # ------------------------------------------------------------------
+
+    def _calc_glcm(self, img, offsets):
+        """Return GLCM matrices for ``img`` for each ``offset``.
+
+        Parameters
+        ----------
+        img : ndarray
+            2D or 3D image containing integer grey levels and NaNs.
+        offsets : list of tuple
+            Offsets specified in ``(dx, dy)`` for 2D or ``(dx, dy, dz)`` for 3D.
+
+        Returns
+        -------
+        np.ndarray
+            Array of shape ``(n_dirs, lvl, lvl)`` with dtype ``np.int64``.
+        """
+
+        lvl = self.lvl
+        glcms = np.zeros((len(offsets), lvl, lvl), dtype=np.int64)
+        for idx, off in enumerate(offsets):
+            shift = tuple(reversed(off))  # match array axis order (z, y, x)
+            slices1 = []
+            slices2 = []
+            for axis, s in enumerate(shift):
+                if s >= 0:
+                    slices1.append(slice(0, img.shape[axis] - s))
+                    slices2.append(slice(s, img.shape[axis]))
+                else:
+                    slices1.append(slice(-s, img.shape[axis]))
+                    slices2.append(slice(0, img.shape[axis] + s))
+
+            arr1 = img[tuple(slices1)]
+            arr2 = img[tuple(slices2)]
+
+            mask = ~np.isnan(arr1) & ~np.isnan(arr2)
+            if np.any(mask):
+                y = arr1[mask].astype(np.int64)
+                x = arr2[mask].astype(np.int64)
+                pairs = y * lvl + x
+                hist = np.bincount(pairs, minlength=lvl * lvl).reshape(lvl, lvl)
+                glcms[idx] = hist + hist.T
+
+        return glcms
+
+    # ------------------------------------------------------------------
     # Original public API
     # ------------------------------------------------------------------
 
     def calc_glc_2d_matrices(self):
 
-        def calc_2_d_glcm_slice(image, direction):
-            # Ensure only the first two values are used for 2D GLCM
-            dx, dy, *_ = direction  # Unpacks only dx and dy, ignoring dz
-
-            rows, cols = image.shape
-            glcm_slice = np.zeros((self.lvl, self.lvl), dtype=int)
-
-            # Create mask for NaN values
-            nan_mask = np.isnan(image)
-
-            # Compute valid indices
-            if dx >= 0:
-                valid_i = np.arange(rows - dx)
-            else:
-                valid_i = np.arange(-dx, rows)
-
-            if dy >= 0:
-                valid_j = np.arange(cols - dy)
-            else:
-                valid_j = np.arange(-dy, cols)
-
-            # Create meshgrid for valid pixel locations
-            i_grid, j_grid = np.meshgrid(valid_i, valid_j, indexing='ij')
-
-            # Get pixel values
-            row_pixels = image[i_grid, j_grid]
-            col_pixels = image[i_grid + dx, j_grid + dy]
-
-            # Mask invalid (NaN) pairs
-            valid_pairs = ~nan_mask[i_grid, j_grid] & ~nan_mask[i_grid + dx, j_grid + dy]
-
-            # Update GLCM using NumPy indexing
-            np.add.at(glcm_slice, (row_pixels[valid_pairs].astype(int), col_pixels[valid_pairs].astype(int)), 1)
-
-            return glcm_slice
-
         self.tot_no_of_roi_voxels = np.sum(~np.isnan(self.image))
-        for z in range(self.image.shape[2]):
-            if not np.all(np.isnan(self.image[:, :, z])):
-                self.slice_no_of_roi_voxels.append(np.sum(~np.isnan(self.image[:, :, z])))
-                z_slice_list = []
-                for direction_2D in [[1, 0, 0], [1, 1, 0], [0, 1, 0], [-1, 1, 0]]:
-                    glcm = calc_2_d_glcm_slice(self.image[:, :, z], direction_2D)
-                    z_slice_list.append((glcm + glcm.T))
+        offsets_2d = [(1, 0), (1, 1), (0, 1), (-1, 1)]
 
-                self.glcm_2d_matrices.append(z_slice_list)
+        for z in range(self.image.shape[2]):
+            slice_img = self.image[:, :, z]
+            if np.all(np.isnan(slice_img)):
+                continue
+            self.slice_no_of_roi_voxels.append(np.sum(~np.isnan(slice_img)))
+            glcm_slice = self._calc_glcm(slice_img, offsets_2d)
+            self.glcm_2d_matrices.append(glcm_slice)
+
         self.glcm_2d_matrices = np.array(self.glcm_2d_matrices)
 
     def calc_glc_3d_matrix(self):  # arr, dir_vector, n_bits):
 
-        self.glcm_3d_matrix = []
+        offsets_3d = [
+            (0, 0, 1),
+            (0, 1, 0),
+            (1, 0, 0),
+            (0, 1, 1),
+            (0, 1, -1),
+            (1, 0, 1),
+            (1, 0, -1),
+            (1, 1, 0),
+            (1, -1, 0),
+            (1, 1, 1),
+            (1, 1, -1),
+            (1, -1, 1),
+            (1, -1, -1),
+        ]
 
-        for direction_3D in [[0, 0, 1], [0, 1, 0], [1, 0, 0], [0, 1, 1], [0, 1, -1],
-                             [1, 0, 1], [1, 0, -1], [1, 1, 0], [1, -1, 0], [1, 1, 1],
-                             [1, 1, -1], [1, -1, 1], [1, -1, -1]]:
-            co_matrix = np.zeros((self.lvl, self.lvl), dtype=np.float64)
-
-            len_arr, len_arr_0, len_arr_0_0 = len(self.image), len(self.image[0]), len(self.image[0][0])
-            min_i, min_y, min_x = max(0, -direction_3D[2]), max(0, -direction_3D[1]), max(0, -direction_3D[0])
-            max_i, max_y, max_x = min(len_arr, len_arr - direction_3D[2]), min(len_arr_0,
-                                                                               len_arr_0 - direction_3D[1]), min(
-                len_arr_0_0, len_arr_0_0 - direction_3D[0])
-
-            arr1 = self.image[min_i:max_i, min_y:max_y, min_x:max_x]
-            arr2 = self.image[min_i + direction_3D[2]:max_i + direction_3D[2],
-                   min_y + direction_3D[1]:max_y + direction_3D[1], min_x + direction_3D[0]:max_x + direction_3D[0]]
-
-            not_nan_mask = np.logical_and(~np.isnan(arr1), ~np.isnan(arr2))
-
-            y_cm_values = arr1[not_nan_mask].astype(int)
-            x_cm_values = arr2[not_nan_mask].astype(int)
-
-            np.add.at(co_matrix, (y_cm_values, x_cm_values), 1)
-            np.add.at(co_matrix, (x_cm_values, y_cm_values), 1)
-
-            self.glcm_3d_matrix.append(co_matrix)
-
-        self.glcm_3d_matrix = np.array(self.glcm_3d_matrix)
+        self.glcm_3d_matrix = self._calc_glcm(self.image, offsets_3d)
 
     def calc_p_minus(self, matrix):
         matrix = np.asarray(matrix)  # Ensure input is a NumPy array
