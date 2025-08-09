@@ -1,19 +1,17 @@
 import numpy as np
 from scipy.ndimage import convolve
 
-
-# list of feature names calculated from the NGTDM matrix
-FEATURES = ("coarseness", "contrast", "busyness", "complexity", "strength")
+from .texture_base import TextureFeatureBase
 
 
-class NGTDM:
+class NGTDM(TextureFeatureBase):
+    FEATURE_NAMES = ["coarseness", "contrast", "busyness", "complexity", "strength"]
+
     def __init__(self, image, slice_weight=False, slice_median=False):
 
-        self.image = image  # Import image as (x, y, z) array
+        super().__init__(image, self.FEATURE_NAMES, slice_weight, slice_median)
         self.lvl = int(np.nanmax(self.image) + 1)
         self.tot_no_of_roi_voxels = np.sum(~np.isnan(image))
-        self.slice_weight = slice_weight
-        self.slice_median = slice_median
 
         x_indices, y_indices, z_indices = np.where(~np.isnan(self.image))
         self.range_x = np.unique(x_indices)
@@ -23,12 +21,6 @@ class NGTDM:
         self.ngtd_2d_matrices = []
         self.ngtd_3d_matrix = None
         self.slice_no_of_roi_voxels = []
-
-        # initialise feature attributes and containers in a generic way
-        self.feature_lists = {name: [] for name in FEATURES}
-        for name in FEATURES:
-            setattr(self, name, 0)
-            setattr(self, f"{name}_list", self.feature_lists[name])
 
     def _calc_ngtdm(self, img, kernel):
         """Calculate the NGTDM matrix for a provided image and kernel.
@@ -178,9 +170,11 @@ class NGTDM:
 
     def _calc_features(self, matrix):
         """Calculate all texture features for a given NGTDM matrix."""
-        return {name: getattr(self, f"calc_{name}")(matrix) for name in FEATURES}
+        return {name: getattr(self, f"calc_{name}")(matrix) for name in self.FEATURE_NAMES}
 
     def calc_2d_ngtdm_features(self):
+
+        self._reset_feature_lists()
 
         number_of_slices = self.ngtd_2d_matrices.shape[0]
         weights = []
@@ -193,18 +187,9 @@ class NGTDM:
             weights.append(weight)
 
             feats = self._calc_features(ngtdm_slice)
-            for name, value in feats.items():
-                self.feature_lists[name].append(value)
+            self._append_features(feats)
 
-        if self.slice_median and not self.slice_weight:
-            for name in FEATURES:
-                setattr(self, name, np.median(self.feature_lists[name]))
-        elif not self.slice_median:
-            for name in FEATURES:
-                setattr(self, name, np.average(self.feature_lists[name], weights=weights))
-        else:
-            print('Weighted median not supported. Aborted!')
-            return
+        self._finalize_features(weights)
 
     def calc_2_5d_ngtdm_features(self):
 
