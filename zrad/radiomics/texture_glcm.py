@@ -1,20 +1,138 @@
+"""Calculation and feature extraction for Grey Level Co-occurrence Matrices.
+
+The original implementation bundled matrix generation, aggregation and feature
+extraction in a single monolithic class.  This module now provides two
+dedicated classes:
+
+``GLCMMatrix``
+    Responsible solely for calculating 2D and 3D GLCM matrices from an input
+    image.  It stores intermediate data such as the per-slice number of ROI
+    voxels which can later be used for weighting strategies.
+
+``GLCMFeatures``
+    Computes the radiomic features from one or more GLCM matrices.  The class
+    does not perform any aggregation itself – this is handled by
+    :class:`zrad.radiomics.glcm_merger.GLCMMerger` – but it can take weights to
+    aggregate feature values across multiple matrices.  Consequently, it is now
+    possible to calculate GLCM matrices without extracting any features and to
+    optionally merge matrices before the feature extraction step.
+"""
+
+from __future__ import annotations
+
 import numpy as np
 
 
-class GLCM:
+# ---------------------------------------------------------------------------
+# GLCM matrix calculation
+# ---------------------------------------------------------------------------
 
-    def __init__(self, image, slice_weight=False, slice_median=False):
+
+class GLCMMatrix:
+    """Calculate grey level co-occurrence matrices for a given image."""
+
+    def __init__(self, image: np.ndarray):
         self.image = image
+        self.lvl = int(np.nanmax(self.image) + 1)
+
+        # Containers populated by ``calc_glc_2d_matrices`` / ``calc_glc_3d_matrix``
+        self.glcm_2d_matrices: np.ndarray | None = None
+        self.glcm_3d_matrix: np.ndarray | None = None
+
+        # Book keeping for weighting strategies
+        self.slice_no_of_roi_voxels: list[int] = []
+        self.tot_no_of_roi_voxels: int | None = None
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+    def _calc_glcm(self, img: np.ndarray, offsets: list[tuple[int, ...]]) -> np.ndarray:
+        """Return GLCM matrices for ``img`` for each ``offset``."""
+
+        lvl = self.lvl
+        glcms = np.zeros((len(offsets), lvl, lvl), dtype=np.int64)
+        for idx, off in enumerate(offsets):
+            shift = tuple(reversed(off))  # match array axis order (z, y, x)
+            slices1: list[slice] = []
+            slices2: list[slice] = []
+            for axis, s in enumerate(shift):
+                if s >= 0:
+                    slices1.append(slice(0, img.shape[axis] - s))
+                    slices2.append(slice(s, img.shape[axis]))
+                else:
+                    slices1.append(slice(-s, img.shape[axis]))
+                    slices2.append(slice(0, img.shape[axis] + s))
+
+            arr1 = img[tuple(slices1)]
+            arr2 = img[tuple(slices2)]
+
+            mask = ~np.isnan(arr1) & ~np.isnan(arr2)
+            if np.any(mask):
+                y = arr1[mask].astype(np.int64)
+                x = arr2[mask].astype(np.int64)
+                pairs = y * lvl + x
+                hist = np.bincount(pairs, minlength=lvl * lvl).reshape(lvl, lvl)
+                glcms[idx] = hist + hist.T
+
+        return glcms
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+    def calc_glc_2d_matrices(self) -> None:
+        """Compute per-slice 2D GLCM matrices."""
+
+        self.tot_no_of_roi_voxels = int(np.sum(~np.isnan(self.image)))
+        offsets_2d = [(1, 0), (1, 1), (0, 1), (-1, 1)]
+
+        matrices = []
+        slice_voxels: list[int] = []
+        for z in range(self.image.shape[2]):
+            slice_img = self.image[:, :, z]
+            if np.all(np.isnan(slice_img)):
+                continue
+            slice_voxels.append(int(np.sum(~np.isnan(slice_img))))
+            glcm_slice = self._calc_glcm(slice_img, offsets_2d)
+            matrices.append(glcm_slice)
+
+        self.slice_no_of_roi_voxels = slice_voxels
+        self.glcm_2d_matrices = np.array(matrices)
+
+    def calc_glc_3d_matrix(self) -> None:
+        """Compute 3D GLCM matrices for the entire volume."""
+
+        offsets_3d = [
+            (0, 0, 1),
+            (0, 1, 0),
+            (1, 0, 0),
+            (0, 1, 1),
+            (0, 1, -1),
+            (1, 0, 1),
+            (1, 0, -1),
+            (1, 1, 0),
+            (1, -1, 0),
+            (1, 1, 1),
+            (1, 1, -1),
+            (1, -1, 1),
+            (1, -1, -1),
+        ]
+
+        self.glcm_3d_matrix = self._calc_glcm(self.image, offsets_3d)
+
+
+# ---------------------------------------------------------------------------
+# Feature extraction
+# ---------------------------------------------------------------------------
+
+
+class GLCMFeatures:
+    """Extract radiomic features from one or more GLCM matrices."""
+
+    def __init__(self, slice_weight: bool = False, slice_median: bool = False):
         self.slice_weight = slice_weight
         self.slice_median = slice_median
-        self.lvl = int(np.nanmax(self.image) + 1)
-        self.glcm_2d_matrices = None
-        self.glcm_3d_matrix = None
 
-        self.glcm_2d_matrices = []
-        self.slice_no_of_roi_voxels = []
-
-        # Feature names used across the class. The first 25 match the benchmark
+        # Feature names used across the class.  The first 25 match the benchmark
         # feature numbers used in the original implementation.
         self.feature_names = [
             "joint_max",
@@ -44,34 +162,22 @@ class GLCM:
             "inf_cor_2",
         ]
 
-        # Dynamically create attributes for feature values and per-slice lists
-        # to avoid repetitive code.
         for name in self.feature_names:
-            setattr(self, name, 0)
+            setattr(self, name, 0.0)
             setattr(self, f"{name}_list", [])
 
     # ------------------------------------------------------------------
     # Helper utilities
     # ------------------------------------------------------------------
-
-    def _reset_feature_lists(self):
-        """Clear all feature lists used for intermediate calculations."""
+    def _reset_feature_lists(self) -> None:
         for name in self.feature_names:
             getattr(self, f"{name}_list").clear()
 
-    def _calc_features_from_glcm(self, glcm):
-        """Calculate all features for a single GLCM matrix.
-
-        The input matrix is normalised internally. A dictionary mapping the
-        feature name to its value is returned. This method centralises the
-        feature calculations and is reused across the different aggregation
-        strategies to avoid code duplication.
-        """
-
+    def _calc_features_from_glcm(self, glcm: np.ndarray) -> dict[str, float]:
         glcm = glcm / np.sum(glcm)
 
-        features = {}
-        features["joint_max"] = np.max(glcm)
+        features: dict[str, float] = {}
+        features["joint_max"] = float(np.max(glcm))
         joint_average = self.calc_joint_average(glcm)
         features["joint_average"] = joint_average
         features["joint_var"] = self.calc_joint_var(glcm, joint_average)
@@ -109,138 +215,92 @@ class GLCM:
 
         return features
 
-    def _append_features(self, glcm):
-        """Compute features for ``glcm`` and append them to the lists."""
+    def _append_features(self, glcm: np.ndarray) -> None:
         features = self._calc_features_from_glcm(glcm)
         for name, value in features.items():
             getattr(self, f"{name}_list").append(value)
 
-    def _finalize_features(self, weights):
-        """Finalize feature values from stored lists using ``weights``.
-
-        Depending on ``slice_median`` and ``slice_weight`` the features are
-        aggregated using a median or a weighted average.
-        """
-
+    def _finalize_features(self, weights: list[float] | None) -> None:
         if self.slice_median and not self.slice_weight:
             for name in self.feature_names:
-                setattr(self, name, np.median(getattr(self, f"{name}_list")))
+                setattr(self, name, float(np.median(getattr(self, f"{name}_list"))))
         elif not self.slice_median:
-            for name in self.feature_names:
-                setattr(
-                    self,
-                    name,
-                    np.average(getattr(self, f"{name}_list"), weights=weights),
-                )
+            if self.slice_weight and weights is not None:
+                for name in self.feature_names:
+                    setattr(
+                        self,
+                        name,
+                        float(np.average(getattr(self, f"{name}_list"), weights=weights)),
+                    )
+            else:
+                for name in self.feature_names:
+                    setattr(
+                        self,
+                        name,
+                        float(np.average(getattr(self, f"{name}_list"))),
+                    )
         else:
             print("Weighted median not supported. Aborted!")
 
     # ------------------------------------------------------------------
-    # Common GLCM computation
+    # Public API
     # ------------------------------------------------------------------
-
-    def _calc_glcm(self, img, offsets):
-        """Return GLCM matrices for ``img`` for each ``offset``.
+    def extract(self, glcms: np.ndarray, weights: list[float] | None = None) -> dict[str, float]:
+        """Extract features from ``glcms``.
 
         Parameters
         ----------
-        img : ndarray
-            2D or 3D image containing integer grey levels and NaNs.
-        offsets : list of tuple
-            Offsets specified in ``(dx, dy)`` for 2D or ``(dx, dy, dz)`` for 3D.
-
-        Returns
-        -------
-        np.ndarray
-            Array of shape ``(n_dirs, lvl, lvl)`` with dtype ``np.int64``.
+        glcms : np.ndarray
+            Input matrices.  Accepted shapes are ``(n, lvl, lvl)`` or
+            ``(n_slices, n_dirs, lvl, lvl)``.  In the latter case the array is
+            flattened before feature extraction.
+        weights : list of float, optional
+            Weights used when aggregating feature values.  The length must match
+            the number of matrices after flattening.  If ``None`` equal weights
+            are assumed.
         """
 
-        lvl = self.lvl
-        glcms = np.zeros((len(offsets), lvl, lvl), dtype=np.int64)
-        for idx, off in enumerate(offsets):
-            shift = tuple(reversed(off))  # match array axis order (z, y, x)
-            slices1 = []
-            slices2 = []
-            for axis, s in enumerate(shift):
-                if s >= 0:
-                    slices1.append(slice(0, img.shape[axis] - s))
-                    slices2.append(slice(s, img.shape[axis]))
-                else:
-                    slices1.append(slice(-s, img.shape[axis]))
-                    slices2.append(slice(0, img.shape[axis] + s))
+        self._reset_feature_lists()
 
-            arr1 = img[tuple(slices1)]
-            arr2 = img[tuple(slices2)]
+        glcms = np.asarray(glcms)
+        if glcms.ndim == 4:
+            matrices = glcms.reshape(-1, glcms.shape[-2], glcms.shape[-1])
+        elif glcms.ndim == 3:
+            matrices = glcms
+        else:
+            matrices = glcms[np.newaxis, :, :]
 
-            mask = ~np.isnan(arr1) & ~np.isnan(arr2)
-            if np.any(mask):
-                y = arr1[mask].astype(np.int64)
-                x = arr2[mask].astype(np.int64)
-                pairs = y * lvl + x
-                hist = np.bincount(pairs, minlength=lvl * lvl).reshape(lvl, lvl)
-                glcms[idx] = hist + hist.T
+        if weights is None:
+            weights = [1.0] * len(matrices)
 
-        return glcms
+        for glcm in matrices:
+            self._append_features(glcm)
+
+        self._finalize_features(weights)
+
+        return {name: getattr(self, name) for name in self.feature_names}
 
     # ------------------------------------------------------------------
-    # Original public API
+    # Feature calculation utilities
     # ------------------------------------------------------------------
-
-    def calc_glc_2d_matrices(self):
-
-        self.tot_no_of_roi_voxels = np.sum(~np.isnan(self.image))
-        offsets_2d = [(1, 0), (1, 1), (0, 1), (-1, 1)]
-
-        for z in range(self.image.shape[2]):
-            slice_img = self.image[:, :, z]
-            if np.all(np.isnan(slice_img)):
-                continue
-            self.slice_no_of_roi_voxels.append(np.sum(~np.isnan(slice_img)))
-            glcm_slice = self._calc_glcm(slice_img, offsets_2d)
-            self.glcm_2d_matrices.append(glcm_slice)
-
-        self.glcm_2d_matrices = np.array(self.glcm_2d_matrices)
-
-    def calc_glc_3d_matrix(self):  # arr, dir_vector, n_bits):
-
-        offsets_3d = [
-            (0, 0, 1),
-            (0, 1, 0),
-            (1, 0, 0),
-            (0, 1, 1),
-            (0, 1, -1),
-            (1, 0, 1),
-            (1, 0, -1),
-            (1, 1, 0),
-            (1, -1, 0),
-            (1, 1, 1),
-            (1, 1, -1),
-            (1, -1, 1),
-            (1, -1, -1),
-        ]
-
-        self.glcm_3d_matrix = self._calc_glcm(self.image, offsets_3d)
-
     def calc_p_minus(self, matrix):
-        matrix = np.asarray(matrix)  # Ensure input is a NumPy array
+        matrix = np.asarray(matrix)
         n_g = matrix.shape[0]
 
-        # Use NumPy advanced indexing to sum along diagonals
         p_minus = np.zeros(n_g)
-        for k in range(n_g):  # k should start at 0 (not n_g - 1)
+        for k in range(n_g):
             mask = np.abs(np.subtract.outer(np.arange(n_g), np.arange(n_g))) == k
             p_minus[k] = matrix[mask].sum()
 
         return p_minus
 
     def calc_p_plus(self, matrix):
-        matrix = np.asarray(matrix)  # Ensure input is a NumPy array
+        matrix = np.asarray(matrix)
         n_g = matrix.shape[0]
 
-        # Correct size of p_plus
         p_plus = np.zeros(2 * n_g - 1)
 
-        for k in range(2 * n_g - 1):  # Adjust range to start from 0
+        for k in range(2 * n_g - 1):
             mask = np.add.outer(np.arange(n_g), np.arange(n_g)) == k
             p_plus[k] = matrix[mask].sum()
         return p_plus
@@ -265,7 +325,6 @@ class GLCM:
         return (np.sum(matrix * i * j) - mu_i ** 2) / sigma_i ** 2
 
     def calc_cluster_tendency_shade_prominence(self, matrix, pover):
-
         mu_i, _ = self.calc_mu_i_and_sigma_i(matrix)
         i, j = np.indices(matrix.shape)
 
@@ -383,77 +442,6 @@ class GLCM:
         i, j = np.indices(matrix.shape)
         return np.sum(matrix * i * j)
 
-    def calc_2d_averaged_glcm_features(self):
-        self._reset_feature_lists()
 
-        number_of_slices = self.glcm_2d_matrices.shape[0]
-        number_of_directions = self.glcm_2d_matrices.shape[1]
-        weights = []
-        for i in range(number_of_slices):
-            weight = (
-                self.slice_no_of_roi_voxels[i] / self.tot_no_of_roi_voxels
-                if self.slice_weight
-                else 1
-            )
-            for j in range(number_of_directions):
-                self._append_features(self.glcm_2d_matrices[i][j])
-                weights.append(weight)
-
-        self._finalize_features(weights)
-
-    def calc_2d_slice_merged_glcm_features(self):
-        self._reset_feature_lists()
-
-        number_of_slices = self.glcm_2d_matrices.shape[0]
-        weights = []
-
-        averaged_glcm = np.sum(self.glcm_2d_matrices, axis=1)
-        for slice_id in range(number_of_slices):
-            self._append_features(averaged_glcm[slice_id])
-            weight = (
-                self.slice_no_of_roi_voxels[slice_id] / self.tot_no_of_roi_voxels
-                if self.slice_weight
-                else 1
-            )
-            weights.append(weight)
-
-        self._finalize_features(weights)
-
-    def calc_2_5d_merged_glcm_features(self):
-        glcm = np.sum(np.sum(self.glcm_2d_matrices, axis=1), axis=0)
-        features = self._calc_features_from_glcm(glcm)
-        for name, value in features.items():
-            setattr(self, name, value)
-
-    def calc_2_5d_direction_merged_glcm_features(self):
-        averaged_glcm = np.sum(self.glcm_2d_matrices, axis=0)
-        number_of_directions = averaged_glcm.shape[0]
-        feature_sums = {name: 0 for name in self.feature_names}
-
-        for glcm in averaged_glcm:
-            features = self._calc_features_from_glcm(glcm)
-            for name in self.feature_names:
-                feature_sums[name] += features[name]
-
-        for name in self.feature_names:
-            setattr(self, name, feature_sums[name] / number_of_directions)
-
-    def calc_3d_averaged_glcm_features(self):
-        feature_sums = {name: 0 for name in self.feature_names}
-        n_dirs = len(self.glcm_3d_matrix)
-
-        for glcm in self.glcm_3d_matrix:
-            features = self._calc_features_from_glcm(glcm)
-            for name in self.feature_names:
-                feature_sums[name] += features[name]
-
-        for name in self.feature_names:
-            setattr(self, name, feature_sums[name] / n_dirs)
-
-    def calc_3d_merged_glcm_features(self):
-        glcm = np.sum(self.glcm_3d_matrix, axis=0)
-        features = self._calc_features_from_glcm(glcm)
-        for name, value in features.items():
-            setattr(self, name, value)
-
+__all__ = ["GLCMMatrix", "GLCMFeatures"]
 

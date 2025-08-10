@@ -4,7 +4,7 @@ from .intensity_local import LocalIntensityFeatures
 from .intensity_statistics import IntensityBasedStatFeatures
 from .intensity_histogram import IntensityHistogramFeatures
 from .intensity_volume_histogram import IntensityVolumeHistogramFeatures
-from .texture_glcm import GLCM
+from .texture_glcm import GLCMMatrix, GLCMFeatures
 from .texture_gldzm import GLDZM
 from .texture_glszm import GLSZM
 from .texture_glrlm import GLRLM
@@ -18,7 +18,8 @@ __all__ = [
     "IntensityBasedStatFeatures",
     "IntensityHistogramFeatures",
     "IntensityVolumeHistogramFeatures",
-    "GLCM",
+    "GLCMMatrix",
+    "GLCMFeatures",
     "GLRLM",
     "GLSZM",
     "GLDZM",
