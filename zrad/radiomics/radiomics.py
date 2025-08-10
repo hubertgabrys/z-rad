@@ -7,7 +7,8 @@ from .intensity_local import LocalIntensityFeatures
 from .intensity_statistics import IntensityBasedStatFeatures
 from .intensity_histogram import IntensityHistogramFeatures
 from .intensity_volume_histogram import IntensityVolumeHistogramFeatures
-from .texture_glcm import GLCM
+from .texture_glcm import GLCMMatrix, GLCMFeatures
+from .glcm_merger import GLCMMerger
 from .texture_gldzm import GLDZM
 from .texture_glszm import GLSZM
 from .texture_glrlm import GLRLM
@@ -517,51 +518,78 @@ class Radiomics:
         self.discr_intensity_features_list.append(self.discr_intensity_based_features)
 
     def _calc_texture_features(self):
-        glcm = GLCM(image=self.patient_intensity_mask.array.T, slice_weight=self.slice_weighting,
-                    slice_median=self.slice_median)
+        glcm_matrix = GLCMMatrix(image=self.patient_intensity_mask.array.T)
+        glcm_features = GLCMFeatures(
+            slice_weight=self.slice_weighting, slice_median=self.slice_median
+        )
+
         if self.aggr_dim == '3D':
-            glcm.calc_glc_3d_matrix()
-            if self.aggr_method == 'AVER':
-                glcm.calc_3d_averaged_glcm_features()
-            elif self.aggr_method == 'MERG':
-                glcm.calc_3d_merged_glcm_features()
+            glcm_matrix.calc_glc_3d_matrix()
+            matrices = glcm_matrix.glcm_3d_matrix
+            if self.aggr_method == 'MERG':
+                matrices = GLCMMerger('full').merge(matrices)
+            glcm_features.extract(matrices)
 
         elif self.aggr_dim == '2.5D' or self.aggr_dim == '2D':
-            glcm.calc_glc_2d_matrices()
+            glcm_matrix.calc_glc_2d_matrices()
+            matrices = glcm_matrix.glcm_2d_matrices
             if self.aggr_method == 'DIR_MERG':
-                glcm.calc_2_5d_direction_merged_glcm_features()
+                matrices = GLCMMerger('direction').merge(matrices)
+                glcm_features.extract(matrices)
             elif self.aggr_method == 'MERG':
-                glcm.calc_2_5d_merged_glcm_features()
+                matrices = GLCMMerger('full').merge(matrices)
+                glcm_features.extract(matrices)
             elif self.aggr_method == 'AVER':
-                glcm.calc_2d_averaged_glcm_features()
+                weights = []
+                for i in range(len(glcm_matrix.slice_no_of_roi_voxels)):
+                    weight = (
+                        glcm_matrix.slice_no_of_roi_voxels[i]
+                        / glcm_matrix.tot_no_of_roi_voxels
+                        if self.slice_weighting
+                        else 1
+                    )
+                    weights.extend([weight] * matrices.shape[1])
+                glcm_features.extract(matrices, weights)
             elif self.aggr_method == 'SLICE_MERG':
-                glcm.calc_2d_slice_merged_glcm_features()
+                matrices = GLCMMerger('slice').merge(matrices)
+                weights = []
+                for i in range(len(glcm_matrix.slice_no_of_roi_voxels)):
+                    weight = (
+                        glcm_matrix.slice_no_of_roi_voxels[i]
+                        / glcm_matrix.tot_no_of_roi_voxels
+                        if self.slice_weighting
+                        else 1
+                    )
+                    weights.append(weight)
+                glcm_features.extract(matrices, weights)
 
-        self.glcm_features = [glcm.joint_max,
-                              glcm.joint_average,
-                              glcm.joint_var,
-                              glcm.joint_entropy,
-                              glcm.dif_average,
-                              glcm.dif_var,
-                              glcm.dif_entropy,
-                              glcm.sum_average,
-                              glcm.sum_var,
-                              glcm.sum_entropy,
-                              glcm.ang_second_moment,
-                              glcm.contrast,
-                              glcm.dissimilarity,
-                              glcm.inv_diff,
-                              glcm.norm_inv_diff,
-                              glcm.inv_diff_moment,
-                              glcm.norm_inv_diff_moment,
-                              glcm.inv_variance,
-                              glcm.cor,
-                              glcm.autocor,
-                              glcm.cluster_tendency,
-                              glcm.cluster_shade,
-                              glcm.cluster_prominence,
-                              glcm.inf_cor_1,
-                              glcm.inf_cor_2]
+        self.glcm_features = [
+            glcm_features.joint_max,
+            glcm_features.joint_average,
+            glcm_features.joint_var,
+            glcm_features.joint_entropy,
+            glcm_features.dif_average,
+            glcm_features.dif_var,
+            glcm_features.dif_entropy,
+            glcm_features.sum_average,
+            glcm_features.sum_var,
+            glcm_features.sum_entropy,
+            glcm_features.ang_second_moment,
+            glcm_features.contrast,
+            glcm_features.dissimilarity,
+            glcm_features.inv_diff,
+            glcm_features.norm_inv_diff,
+            glcm_features.inv_diff_moment,
+            glcm_features.norm_inv_diff_moment,
+            glcm_features.inv_variance,
+            glcm_features.cor,
+            glcm_features.autocor,
+            glcm_features.cluster_tendency,
+            glcm_features.cluster_shade,
+            glcm_features.cluster_prominence,
+            glcm_features.inf_cor_1,
+            glcm_features.inf_cor_2,
+        ]
         self.glcm_features_list.append(self.glcm_features)
         glrlm = GLRLM(image=self.patient_intensity_mask.array.T, slice_weight=self.slice_weighting,
                                         slice_median=self.slice_median)
