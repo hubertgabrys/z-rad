@@ -20,6 +20,14 @@ BACKGROUND_COLOR = "#005ea8"
 FONT_FAMILY = 'Verdana'
 FONT_SIZE = 14
 
+import sys, os
+
+with open(os.path.expanduser("~/zrad-app.log"), "w") as f:
+    f.write("CWD=" + os.getcwd() + "\n")
+    for k, v in sorted(os.environ.items()):
+        f.write(f"{k}={v}\n")
+
+
 
 def resource_path(relative_path: str) -> str:
     try:
