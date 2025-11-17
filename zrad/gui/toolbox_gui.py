@@ -1,5 +1,20 @@
+from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtGui import QFont
-from PyQt5.QtWidgets import QLineEdit, QLabel, QPushButton, QComboBox, QCheckBox, QMessageBox, QWidget
+from PyQt5.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QProgressBar,
+    QVBoxLayout,
+    QWidget,
+)
+
+from ..toolbox_logic import tqdm_joblib
 
 
 class CustomButton(QPushButton):
@@ -178,3 +193,82 @@ class CustomInfoBox(QMessageBox):
     def response(self) -> bool:
         get_response = self.exec_()
         return get_response == QMessageBox.Ok
+
+
+class ProgressDialog(QDialog):
+    def __init__(self, title: str, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setModal(True)
+
+        self.progress_bar = QProgressBar(self)
+        self.status_label = QLabel(self)
+        layout = QVBoxLayout()
+        layout.addWidget(self.status_label)
+        layout.addWidget(self.progress_bar)
+        self.setLayout(layout)
+
+    def start(self, maximum: int, status_text: str = ""):
+        self.progress_bar.setRange(0, maximum)
+        self.progress_bar.setValue(0)
+        self.status_label.setText(status_text)
+        self.show()
+        QApplication.processEvents()
+
+    def increment(self, step: int = 1, status_text: str | None = None):
+        current_value = self.progress_bar.value()
+        self.progress_bar.setValue(current_value + step)
+        if status_text is not None:
+            self.status_label.setText(status_text)
+        # Ensure the UI updates during long-running tasks
+        QApplication.processEvents()
+
+    def finish(self, status_text: str = ""):
+        self.progress_bar.setValue(self.progress_bar.maximum())
+        self.status_label.setText(status_text)
+        QApplication.processEvents()
+        self.close()
+
+
+class PatientProcessingWorker(QThread):
+    progress_updated = pyqtSignal(int, str)
+    completed = pyqtSignal(object)
+    failed = pyqtSignal(str)
+
+    def __init__(self, patient_folders, n_jobs, backend_hint, process_fn, progress_callback=None, parent=None):
+        super().__init__(parent)
+        self.patient_folders = patient_folders
+        self.n_jobs = n_jobs
+        self.backend_hint = backend_hint
+        self.process_fn = process_fn
+        self.progress_callback = progress_callback
+
+    def run(self):
+        try:
+            results = []
+            if self.n_jobs == 1:
+                from tqdm import tqdm
+
+                for patient_folder in tqdm(self.patient_folders, desc="Patient directories"):
+                    status_text = f"Processing {patient_folder}"
+                    if self.progress_callback:
+                        self.progress_callback(1, status_text)
+                    self.progress_updated.emit(1, status_text)
+                    results.append(self.process_fn(patient_folder))
+            else:
+                from joblib import Parallel, delayed
+                from tqdm import tqdm
+
+                def _progress(step=1):
+                    if self.progress_callback:
+                        self.progress_callback(step, "Processing patients...")
+                    self.progress_updated.emit(step, "Processing patients...")
+
+                with tqdm_joblib(tqdm(desc="Patient directories", total=len(self.patient_folders)),
+                                 progress_callback=_progress):
+                    results = Parallel(n_jobs=self.n_jobs, prefer=self.backend_hint)(
+                        delayed(self.process_fn)(patient_folder) for patient_folder in self.patient_folders)
+
+            self.completed.emit(results)
+        except Exception as exc:  # pragma: no cover - safety net for GUI thread
+            self.failed.emit(str(exc))
