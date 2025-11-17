@@ -1,5 +1,6 @@
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -209,6 +210,7 @@ class ProgressDialog(QDialog):
         self.progress_bar.setValue(0)
         self.status_label.setText(status_text)
         self.show()
+        QApplication.processEvents()
 
     def increment(self, step: int = 1, status_text: str | None = None):
         current_value = self.progress_bar.value()
@@ -216,10 +218,10 @@ class ProgressDialog(QDialog):
         if status_text is not None:
             self.status_label.setText(status_text)
         # Ensure the UI updates during long-running tasks
-        self.repaint()
+        QApplication.processEvents()
 
     def finish(self, status_text: str = ""):
         self.progress_bar.setValue(self.progress_bar.maximum())
         self.status_label.setText(status_text)
-        self.repaint()
+        QApplication.processEvents()
         self.close()
