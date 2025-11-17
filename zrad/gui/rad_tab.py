@@ -7,7 +7,6 @@ import numpy as np
 from PyQt5.QtCore import QThread
 import pandas as pd
 from joblib import Parallel, delayed
-from tqdm import tqdm
 
 from ._base_tab import BaseTab, load_images, load_mask
 from .toolbox_gui import (
@@ -365,17 +364,14 @@ class RadiomicsTab(BaseTab):
             def work(progress_callback):
                 if n_jobs == 1:
                     radiomic_features = []
-                    for patient_folder in tqdm(list_of_patient_folders, desc="Patient directories"):
+                    for patient_folder in list_of_patient_folders:
                         radiomic_features.append(
                             process_patient_folder(self.input_params, patient_folder, structure_set)
                         )
                         progress_callback(1)
                 else:
-                    with tqdm_joblib(
-                        tqdm(desc="Patient directories", total=len(list_of_patient_folders)),
-                        progress_callback=progress_callback,
-                    ):
-                        radiomic_features = Parallel(n_jobs=n_jobs)(
+                    with tqdm_joblib(progress_callback=progress_callback):
+                        radiomic_features = Parallel(n_jobs=n_jobs, batch_size=1)(
                             delayed(process_patient_folder)(self.input_params, patient_folder, structure_set)
                             for patient_folder in list_of_patient_folders
                         )
