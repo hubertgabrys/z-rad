@@ -6,16 +6,14 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
-from joblib import Parallel, delayed
-from tqdm import tqdm
 
 from ._base_tab import BaseTab, load_images, load_mask
 from .toolbox_gui import CustomLabel, CustomBox, CustomTextField, CustomCheckBox, CustomWarningBox, CustomInfo, CustomInfoBox, \
-    ProgressDialog
+    ProgressDialog, PatientProcessingWorker
 from ..exceptions import InvalidInputParametersError, DataStructureError
 from ..image import get_dicom_files, get_all_structure_names
 from ..radiomics import Radiomics
-from ..toolbox_logic import get_logger, close_all_loggers, tqdm_joblib
+from ..toolbox_logic import get_logger, close_all_loggers
 
 logging.captureWarnings(True)
 
@@ -357,33 +355,42 @@ class RadiomicsTab(BaseTab):
             n_jobs = self.input_params["number_of_threads"]
             progress_dialog = ProgressDialog("Radiomics Progress", self)
             progress_dialog.start(len(list_of_patient_folders), "Processing patients...")
-            try:
-                if n_jobs == 1:
-                    radiomic_features_list = []
-                    for patient_folder in tqdm(list_of_patient_folders, desc="Patient directories"):
-                        progress_dialog.increment(status_text=f"Processing {patient_folder}")
-                        radiomic_features_list.append(process_patient_folder(self.input_params, patient_folder, structure_set))
-                else:
-                    with tqdm_joblib(tqdm(desc="Patient directories", total=len(list_of_patient_folders)),
-                                     progress_callback=progress_dialog.increment):
-                        radiomic_features_list = Parallel(n_jobs=n_jobs, prefer=backend_hint)(
-                            delayed(process_patient_folder)(self.input_params, patient_folder, structure_set) for patient_folder in list_of_patient_folders)
-            finally:
-                progress_dialog.finish("Radiomics finished!")
 
-            # Save features to CSV
-            if radiomic_features_list:
-                radiomic_features_list = [item for sublist in radiomic_features_list for item in sublist]
-                radiomic_features_df = pd.DataFrame(radiomic_features_list)
-                radiomic_features_df.set_index(['pat_id', 'mask_id'], inplace=True)
-                file_path = os.path.join(self.input_params["output_directory"], 'radiomics.csv')
-                radiomic_features_df.to_csv(file_path)
-                self.logger.info(f"Radiomics saved to {file_path}.")
+            worker = PatientProcessingWorker(
+                list_of_patient_folders,
+                n_jobs,
+                backend_hint,
+                lambda patient_folder: process_patient_folder(self.input_params, patient_folder, structure_set),
+            )
+            self.processing_worker = worker
+            worker.progress_updated.connect(progress_dialog.increment)
+
+            def handle_finished(radiomic_features_list):
+                progress_dialog.finish("Radiomics finished!")
+                self.processing_worker = None
+
+                # Save features to CSV
+                if radiomic_features_list:
+                    radiomic_features_list = [item for sublist in radiomic_features_list for item in sublist]
+                    radiomic_features_df = pd.DataFrame(radiomic_features_list)
+                    radiomic_features_df.set_index(['pat_id', 'mask_id'], inplace=True)
+                    file_path = os.path.join(self.input_params["output_directory"], 'radiomics.csv')
+                    radiomic_features_df.to_csv(file_path)
+                    self.logger.info(f"Radiomics saved to {file_path}.")
+
+                self.logger.info("Radiomics finished!")
+                CustomInfoBox("Radiomics finished!").response()
+
+            def handle_failed(message: str):
+                progress_dialog.finish("Error during radiomics")
+                self.processing_worker = None
+                CustomWarningBox(message).response()
+
+            worker.completed.connect(handle_finished)
+            worker.failed.connect(handle_failed)
+            worker.start()
         else:
             CustomWarningBox("No patients to calculate radiomics from.")
-
-        self.logger.info("Radiomics finished!")
-        CustomInfoBox("Radiomics finished!").response()
 
     def _get_outlier_sigma(self):
         """

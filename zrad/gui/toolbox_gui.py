@@ -1,3 +1,4 @@
+from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QApplication,
@@ -12,6 +13,8 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from ..toolbox_logic import tqdm_joblib
 
 
 class CustomButton(QPushButton):
@@ -225,3 +228,47 @@ class ProgressDialog(QDialog):
         self.status_label.setText(status_text)
         QApplication.processEvents()
         self.close()
+
+
+class PatientProcessingWorker(QThread):
+    progress_updated = pyqtSignal(int, str)
+    completed = pyqtSignal(object)
+    failed = pyqtSignal(str)
+
+    def __init__(self, patient_folders, n_jobs, backend_hint, process_fn, progress_callback=None, parent=None):
+        super().__init__(parent)
+        self.patient_folders = patient_folders
+        self.n_jobs = n_jobs
+        self.backend_hint = backend_hint
+        self.process_fn = process_fn
+        self.progress_callback = progress_callback
+
+    def run(self):
+        try:
+            results = []
+            if self.n_jobs == 1:
+                from tqdm import tqdm
+
+                for patient_folder in tqdm(self.patient_folders, desc="Patient directories"):
+                    status_text = f"Processing {patient_folder}"
+                    if self.progress_callback:
+                        self.progress_callback(1, status_text)
+                    self.progress_updated.emit(1, status_text)
+                    results.append(self.process_fn(patient_folder))
+            else:
+                from joblib import Parallel, delayed
+                from tqdm import tqdm
+
+                def _progress(step=1):
+                    if self.progress_callback:
+                        self.progress_callback(step, "Processing patients...")
+                    self.progress_updated.emit(step, "Processing patients...")
+
+                with tqdm_joblib(tqdm(desc="Patient directories", total=len(self.patient_folders)),
+                                 progress_callback=_progress):
+                    results = Parallel(n_jobs=self.n_jobs, prefer=self.backend_hint)(
+                        delayed(self.process_fn)(patient_folder) for patient_folder in self.patient_folders)
+
+            self.completed.emit(results)
+        except Exception as exc:  # pragma: no cover - safety net for GUI thread
+            self.failed.emit(str(exc))

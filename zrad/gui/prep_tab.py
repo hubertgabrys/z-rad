@@ -5,16 +5,14 @@ import sys
 from datetime import datetime
 
 import numpy as np
-from joblib import Parallel, delayed
-from tqdm import tqdm
 
 from ._base_tab import BaseTab, load_images, load_mask
 from .toolbox_gui import CustomLabel, CustomBox, CustomTextField, CustomWarningBox, CustomCheckBox, \
-    CustomInfo, CustomInfoBox, ProgressDialog
+    CustomInfo, CustomInfoBox, ProgressDialog, PatientProcessingWorker
 from ..exceptions import InvalidInputParametersError, DataStructureError
 from ..image import get_all_structure_names, get_dicom_files
 from ..preprocessing import Preprocessing
-from ..toolbox_logic import get_logger, close_all_loggers, tqdm_joblib
+from ..toolbox_logic import get_logger, close_all_loggers
 
 logging.captureWarnings(True)
 
@@ -443,22 +441,32 @@ class PreprocessingTab(BaseTab):
             n_jobs = self.input_params["number_of_threads"]
             progress_dialog = ProgressDialog("Preprocessing Progress", self)
             progress_dialog.start(len(list_of_patient_folders), "Processing patients...")
-            try:
-                if n_jobs == 1:
-                    for patient_folder in tqdm(list_of_patient_folders, desc="Patient directories"):
-                        progress_dialog.increment(status_text=f"Processing {patient_folder}")
-                        process_patient_folder(self.input_params, patient_folder, structure_set)
-                else:
-                    with tqdm_joblib(tqdm(desc="Patient directories", total=len(list_of_patient_folders)),
-                                     progress_callback=progress_dialog.increment):
-                        Parallel(n_jobs=n_jobs, prefer=backend_hint)(delayed(process_patient_folder)(self.input_params, patient_folder, structure_set) for patient_folder in list_of_patient_folders)
-            finally:
+
+            worker = PatientProcessingWorker(
+                list_of_patient_folders,
+                n_jobs,
+                backend_hint,
+                lambda patient_folder: process_patient_folder(self.input_params, patient_folder, structure_set),
+            )
+            self.processing_worker = worker
+            worker.progress_updated.connect(progress_dialog.increment)
+
+            def handle_finished(_results):
                 progress_dialog.finish("Preprocessing finished!")
+                self.processing_worker = None
+                self.logger.info("Preprocessing finished!")
+                CustomInfoBox("Preprocessing finished!").response()
+
+            def handle_failed(message: str):
+                progress_dialog.finish("Error during preprocessing")
+                self.processing_worker = None
+                CustomWarningBox(message).response()
+
+            worker.completed.connect(handle_finished)
+            worker.failed.connect(handle_failed)
+            worker.start()
         else:
             CustomWarningBox("No patients to calculate preprocess from.")
-
-        self.logger.info("Preprocessing finished!")
-        CustomInfoBox("Preprocessing finished!").response()
 
     def save_settings(self):
         """
