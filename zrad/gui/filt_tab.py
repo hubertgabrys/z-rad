@@ -8,7 +8,8 @@ from joblib import Parallel, delayed
 from tqdm import tqdm
 
 from ._base_tab import BaseTab, load_images
-from .toolbox_gui import CustomButton, CustomLabel, CustomBox, CustomTextField, CustomWarningBox, CustomInfo, CustomInfoBox
+from .toolbox_gui import CustomButton, CustomLabel, CustomBox, CustomTextField, CustomWarningBox, CustomInfo, CustomInfoBox, \
+    ProgressDialog
 from ..exceptions import InvalidInputParametersError, DataStructureError
 from ..filtering import Filtering
 from ..toolbox_logic import get_logger, close_all_loggers, tqdm_joblib
@@ -527,12 +528,19 @@ class FilteringTab(BaseTab):
             self.logger.info("Not frozen state. Set backend_hint to processes")
         if list_of_patient_folders:
             n_jobs = self.input_params["number_of_threads"]
-            if n_jobs == 1:
-                for patient_folder in tqdm(list_of_patient_folders, desc="Patient directories"):
-                    process_patient_folder(self.input_params, patient_folder)
-            else:
-                with tqdm_joblib(tqdm(desc="Patient directories", total=len(list_of_patient_folders))):
-                    Parallel(n_jobs=n_jobs, prefer=backend_hint)(delayed(process_patient_folder)(self.input_params, patient_folder) for patient_folder in list_of_patient_folders)
+            progress_dialog = ProgressDialog("Filtering Progress", self)
+            progress_dialog.start(len(list_of_patient_folders), "Processing patients...")
+            try:
+                if n_jobs == 1:
+                    for patient_folder in tqdm(list_of_patient_folders, desc="Patient directories"):
+                        progress_dialog.increment(status_text=f"Processing {patient_folder}")
+                        process_patient_folder(self.input_params, patient_folder)
+                else:
+                    with tqdm_joblib(tqdm(desc="Patient directories", total=len(list_of_patient_folders)),
+                                     progress_callback=progress_dialog.increment):
+                        Parallel(n_jobs=n_jobs, prefer=backend_hint)(delayed(process_patient_folder)(self.input_params, patient_folder) for patient_folder in list_of_patient_folders)
+            finally:
+                progress_dialog.finish("Filtering finished!")
         else:
             CustomWarningBox("No patients to filter.")
 

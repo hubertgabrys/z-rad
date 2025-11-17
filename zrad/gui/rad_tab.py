@@ -10,7 +10,8 @@ from joblib import Parallel, delayed
 from tqdm import tqdm
 
 from ._base_tab import BaseTab, load_images, load_mask
-from .toolbox_gui import CustomLabel, CustomBox, CustomTextField, CustomCheckBox, CustomWarningBox, CustomInfo, CustomInfoBox
+from .toolbox_gui import CustomLabel, CustomBox, CustomTextField, CustomCheckBox, CustomWarningBox, CustomInfo, CustomInfoBox, \
+    ProgressDialog
 from ..exceptions import InvalidInputParametersError, DataStructureError
 from ..image import get_dicom_files, get_all_structure_names
 from ..radiomics import Radiomics
@@ -354,14 +355,21 @@ class RadiomicsTab(BaseTab):
             self.logger.info("Not frozen state. Set backend_hint to processes")
         if list_of_patient_folders:
             n_jobs = self.input_params["number_of_threads"]
-            if n_jobs == 1:
-                radiomic_features_list = []
-                for patient_folder in tqdm(list_of_patient_folders, desc="Patient directories"):
-                    radiomic_features_list.append(process_patient_folder(self.input_params, patient_folder, structure_set))
-            else:
-                with tqdm_joblib(tqdm(desc="Patient directories", total=len(list_of_patient_folders))):
-                    radiomic_features_list = Parallel(n_jobs=n_jobs, prefer=backend_hint)(
-                        delayed(process_patient_folder)(self.input_params, patient_folder, structure_set) for patient_folder in list_of_patient_folders)
+            progress_dialog = ProgressDialog("Radiomics Progress", self)
+            progress_dialog.start(len(list_of_patient_folders), "Processing patients...")
+            try:
+                if n_jobs == 1:
+                    radiomic_features_list = []
+                    for patient_folder in tqdm(list_of_patient_folders, desc="Patient directories"):
+                        progress_dialog.increment(status_text=f"Processing {patient_folder}")
+                        radiomic_features_list.append(process_patient_folder(self.input_params, patient_folder, structure_set))
+                else:
+                    with tqdm_joblib(tqdm(desc="Patient directories", total=len(list_of_patient_folders)),
+                                     progress_callback=progress_dialog.increment):
+                        radiomic_features_list = Parallel(n_jobs=n_jobs, prefer=backend_hint)(
+                            delayed(process_patient_folder)(self.input_params, patient_folder, structure_set) for patient_folder in list_of_patient_folders)
+            finally:
+                progress_dialog.finish("Radiomics finished!")
 
             # Save features to CSV
             if radiomic_features_list:

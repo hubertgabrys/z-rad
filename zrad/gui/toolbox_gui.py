@@ -1,5 +1,16 @@
 from PyQt5.QtGui import QFont
-from PyQt5.QtWidgets import QLineEdit, QLabel, QPushButton, QComboBox, QCheckBox, QMessageBox, QWidget
+from PyQt5.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QProgressBar,
+    QVBoxLayout,
+    QWidget,
+)
 
 
 class CustomButton(QPushButton):
@@ -178,3 +189,37 @@ class CustomInfoBox(QMessageBox):
     def response(self) -> bool:
         get_response = self.exec_()
         return get_response == QMessageBox.Ok
+
+
+class ProgressDialog(QDialog):
+    def __init__(self, title: str, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.setModal(True)
+
+        self.progress_bar = QProgressBar(self)
+        self.status_label = QLabel(self)
+        layout = QVBoxLayout()
+        layout.addWidget(self.status_label)
+        layout.addWidget(self.progress_bar)
+        self.setLayout(layout)
+
+    def start(self, maximum: int, status_text: str = ""):
+        self.progress_bar.setRange(0, maximum)
+        self.progress_bar.setValue(0)
+        self.status_label.setText(status_text)
+        self.show()
+
+    def increment(self, step: int = 1, status_text: str | None = None):
+        current_value = self.progress_bar.value()
+        self.progress_bar.setValue(current_value + step)
+        if status_text is not None:
+            self.status_label.setText(status_text)
+        # Ensure the UI updates during long-running tasks
+        self.repaint()
+
+    def finish(self, status_text: str = ""):
+        self.progress_bar.setValue(self.progress_bar.maximum())
+        self.status_label.setText(status_text)
+        self.repaint()
+        self.close()
