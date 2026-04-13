@@ -1,4 +1,5 @@
--e ..
+# Install the checked-out repository when running from the repo root.
+-e .
 sphinx>=8
 pydata-sphinx-theme>=0.16.1
 sphinx-design>=0.6
